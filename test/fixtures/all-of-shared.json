@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/schemas/all-of-shared",
+  "title": "AllOfShared",
+  "description": "An allOf schema with shared reference to test reference counting and extends clause generation",
+  "type": "object",
+  "properties": {
+    "baseRef": {
+      "$ref": "#/definitions/BaseObject"
+    },
+    "detailedRef": {
+      "$ref": "#/definitions/DetailedObject"
+    }
+  },
+  "required": ["baseRef", "detailedRef"],
+  "definitions": {
+    "BaseObject": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id"]
+    },
+    "DetailedObject": {
+      "allOf": [
+        { "$ref": "#/definitions/BaseObject" },
+        {
+          "type": "object",
+          "properties": {
+            "name": { "type": "string" },
+            "description": { "type": "string" }
+          }
+        }
+      ]
+    }
+  }
+}

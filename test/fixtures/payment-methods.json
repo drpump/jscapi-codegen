@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/schemas/payment-methods",
+  "title": "PaymentMethods",
+  "description": "Demonstrates structural oneOf without explicit discriminator - each variant is self-contained and distinguishable by its unique properties",
+  "oneOf": [
+    {
+      "title": "CreditCardPayment",
+      "description": "Payment using a credit card",
+      "type": "object",
+      "properties": {
+        "paymentType": {
+          "type": "string",
+          "const": "CREDIT_CARD"
+        },
+        "cardNumber": {
+          "type": "string",
+          "description": "Last 4 digits of card"
+        },
+        "expiryDate": {
+          "type": "string",
+          "format": "date"
+        }
+      },
+      "required": ["paymentType", "cardNumber", "expiryDate"],
+      "additionalProperties": false
+    },
+    {
+      "title": "BankTransferPayment",
+      "description": "Payment using bank transfer",
+      "type": "object",
+      "properties": {
+        "paymentType": {
+          "type": "string",
+          "const": "BANK_TRANSFER"
+        },
+        "accountNumber": {
+          "type": "string"
+        },
+        "routingNumber": {
+          "type": "string"
+        }
+      },
+      "required": ["paymentType", "accountNumber", "routingNumber"],
+      "additionalProperties": false
+    },
+    {
+      "title": "DigitalWalletPayment",
+      "description": "Payment using a digital wallet",
+      "type": "object",
+      "properties": {
+        "paymentType": {
+          "type": "string",
+          "const": "DIGITAL_WALLET"
+        },
+        "walletProvider": {
+          "type": "string",
+          "enum": ["APPLE_PAY", "GOOGLE_PAY", "PAYPAL"]
+        },
+        "walletId": {
+          "type": "string"
+        }
+      },
+      "required": ["paymentType", "walletProvider", "walletId"],
+      "additionalProperties": false
+    }
+  ]
+}

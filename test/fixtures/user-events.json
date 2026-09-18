@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/schemas/user-events",
+  "title": "UserEvents",
+  "description": "Demonstrates allOf combining with oneOf for parent/child inheritance - the child adds extra properties and behavior variants via oneOf",
+  "allOf": [
+    { "$ref": "event-base.json" },
+    {
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "format": "uuid",
+          "description": "The user who triggered the event"
+        }
+      },
+      "required": ["userId"]
+    }
+  ],
+  "oneOf": [
+    {
+      "title": "UserCreatedEvent",
+      "description": "Event fired when a new user is created",
+      "properties": {
+        "eventType": {
+          "type": "string",
+          "const": "USER_CREATED"
+        },
+        "profile": {
+          "type": "object",
+          "properties": {
+            "email": { "type": "string", "format": "email" },
+            "displayName": { "type": "string" }
+          },
+          "required": ["email"]
+        }
+      },
+      "required": ["eventType", "profile"]
+    },
+    {
+      "title": "UserUpdatedEvent",
+      "description": "Event fired when a user profile is updated",
+      "properties": {
+        "eventType": {
+          "type": "string",
+          "const": "USER_UPDATED"
+        },
+        "changes": {
+          "type": "object",
+          "properties": {
+            "displayName": { "type": "string" },
+            "email": { "type": "string", "format": "email" }
+          }
+        }
+      },
+      "required": ["eventType"]
+    },
+    {
+      "title": "UserDeletedEvent",
+      "description": "Event fired when a user is deleted",
+      "properties": {
+        "eventType": {
+          "type": "string",
+          "const": "USER_DELETED"
+        },
+        "deletionReason": {
+          "type": "string"
+        }
+      },
+      "required": ["eventType"]
+    }
+  ]
+}

@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/schemas/content-types",
+  "title": "ContentTypes",
+  "description": "Demonstrates structural anyOf for deterministic use in strongly-typed languages - a document can match multiple variants simultaneously",
+  "anyOf": [
+    {
+      "title": "TextContent",
+      "description": "Plain text content",
+      "type": "object",
+      "properties": {
+        "contentType": {
+          "type": "string",
+          "const": "TEXT"
+        },
+        "textContent": {
+          "type": "string"
+        }
+      },
+      "required": ["contentType", "textContent"],
+      "additionalProperties": false
+    },
+    {
+      "title": "RichContent",
+      "description": "Rich text with optional formatting metadata",
+      "allOf": [
+        {
+          "type": "object",
+          "properties": {
+            "contentType": {
+              "type": "string",
+              "const": "TEXT"
+            }
+          },
+          "required": ["contentType"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "formatting": {
+              "type": "object",
+              "properties": {
+                "hasBold": { "type": "boolean" },
+                "hasLinks": { "type": "boolean" }
+              }
+            }
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    {
+      "title": "ImageContent",
+      "description": "Binary image content",
+      "type": "object",
+      "properties": {
+        "contentType": {
+          "type": "string",
+          "const": "IMAGE"
+        },
+        "imageUrl": {
+          "type": "string",
+          "format": "uri"
+        },
+        "width": {
+          "type": "integer"
+        },
+        "height": {
+          "type": "integer"
+        }
+      },
+      "required": ["contentType", "imageUrl", "width", "height"],
+      "additionalProperties": false
+    },
+    {
+      "title": "VideoContent",
+      "description": "Binary video content",
+      "type": "object",
+      "properties": {
+        "contentType": {
+          "type": "string",
+          "const": "VIDEO"
+        },
+        "videoUrl": {
+          "type": "string",
+          "format": "uri"
+        },
+        "durationSeconds": {
+          "type": "integer"
+        }
+      },
+      "required": ["contentType", "videoUrl", "durationSeconds"],
+      "additionalProperties": false
+    }
+  ]
+}
