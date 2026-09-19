@@ -25,7 +25,7 @@ TBD.
 ## What do we give up?
 * The code generator is for JSON payloads only. We could perhaps do the same for other wire formats (e.g. XML might be a good candidate), but that's not currently being considered.
 * OpenAPI prior to v3.1 wasn't a dialect of JSON schema, so there are potential semantic issues if you use earlier versions of OpenAPI. 
-* It's early days. Things will be bugs, missing features and target languages will be limited. The existing OpenAPI tooling is a lot more mature and broad-based. 
+* It's early days. There will be bugs, missing features and target languages will be limited. The existing OpenAPI tooling is a lot more mature and broad-based. 
 
 ## Design
 
