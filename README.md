@@ -1,3 +1,5 @@
+_**[Work in progress, not ready for use yet]**_
+
 # JSON schema and OpenAPI code generator
 
 This repository implements a code generator for JSON schema and OpenAPI. It differs quite fundamentally from the [standard OpenAPI generator](https://openapi-generator.tech) in a few key ways:
