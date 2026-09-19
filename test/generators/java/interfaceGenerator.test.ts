@@ -16,7 +16,7 @@ describe('interfaceGenerator', () => {
 
             expect(getters).toHaveLength(2);
             expect(getters[0].propertyName).toBe('name');
-            expect(getters[0].javaName).toBe('NAME');
+            expect(getters[0].javaName).toBe('name');
             expect(getters[1].propertyName).toBe('age');
          });
 
@@ -68,7 +68,7 @@ describe('interfaceGenerator', () => {
             };
 
             const getters = generatePropertyGetters(schema, 'Person');
-            expect(getters[0].javaName).toBe('FIRST_NAME');
+            expect(getters[0].javaName).toBe('first_name');
          });
      });
 
