@@ -65,7 +65,7 @@ function buildOptions(
       }));
 }
 
-function generateOptionName(
+export function generateOptionName(
     schema: JsonSchema2020,
     parentName: string,
     index: number
@@ -79,14 +79,21 @@ function generateOptionName(
       // Use $id if present
     if (schema.$id) {
         const basename = schema.$id.split('/').pop();
-        return basename ? capitalize(basename.replace(/\.[^.]+$/, '')) : `${parentName}Option${index}`;
-      }
-      
-      // Fallback to index-based name
+        if (basename) {
+            const nameWithoutExt = basename.replace(/\.[^.]+$/, '');
+            // Convert hyphenated names to CamelCase (e.g., "user-profile" → "UserProfile")
+            return nameWithoutExt
+                .split(/[-_]/)
+                .map(segment => capitalize(segment))
+                .join('');
+        }
+        return `${parentName}Option${index}`;
+        }
+        
+        // Fallback to index-based name
     return `${capitalize(parentName)}Option${index}`;
 }
 
 function capitalize(s: string): string {
-    if (!s) return s;
     return s.charAt(0).toUpperCase() + s.slice(1);
 }

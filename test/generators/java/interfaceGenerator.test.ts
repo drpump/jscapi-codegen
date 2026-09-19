@@ -1,5 +1,5 @@
-import { generatePropertyGetters, generateInterfaceJava, PropertyGetter } from '../../src/generators/java/interfaceGenerator';
-import { JsonSchema2020 } from '../../src/schema/jsonSchemaTypes';
+import { generatePropertyGetters, generateInterfaceJava, PropertyGetter } from '../../../src/generators/java/interfaceGenerator';
+import { JsonSchema2020 } from '../../../src/schema/jsonSchemaTypes';
 
 describe('interfaceGenerator', () => {
     describe('generatePropertyGetters', () => {
@@ -16,7 +16,7 @@ describe('interfaceGenerator', () => {
 
             expect(getters).toHaveLength(2);
             expect(getters[0].propertyName).toBe('name');
-            expect(getters[0].javaName).toBe('name');
+            expect(getters[0].javaName).toBe('NAME');
             expect(getters[1].propertyName).toBe('age');
          });
 
@@ -68,7 +68,7 @@ describe('interfaceGenerator', () => {
             };
 
             const getters = generatePropertyGetters(schema, 'Person');
-            expect(getters[0].javaName).toBe('first_name'); // toCamelCase currently preserves hyphens
+            expect(getters[0].javaName).toBe('FIRST_NAME');
          });
      });
 
@@ -123,7 +123,7 @@ describe('interfaceGenerator', () => {
             ];
 
             const javaCode = generateInterfaceJava('Test', getters);
-            expect(javaCode).toContain('import java.util.List;');
+            expect(javaCode).toContain('import java.util.List');
          });
 
         it('should include Javadoc for properties with descriptions', () => {

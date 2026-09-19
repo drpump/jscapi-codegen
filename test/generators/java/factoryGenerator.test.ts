@@ -1,5 +1,5 @@
-import { generateFactoryClass } from '../../src/generators/java/factoryGenerator';
-import { CompositionInfo } from '../../src/schema/compositionHandler';
+import { generateFactoryClass } from '../../../src/generators/java/factoryGenerator';
+import { CompositionInfo } from '../../../src/schema/compositionHandler';
 
 describe('factoryGenerator', () => {
     describe('generateFactoryClass (simple)', () => {

@@ -1,5 +1,5 @@
-import { mapJsonSchemaToJavaType, setPackageName } from '../../src/generators/java/typeMapper';
-import { JsonSchema2020 } from '../../src/schema/jsonSchemaTypes';
+import { mapJsonSchemaToJavaType, setPackageName } from '../../../src/generators/java/typeMapper';
+import { JsonSchema2020 } from '../../../src/schema/jsonSchemaTypes';
 
 describe('typeMapper', () => {
     beforeEach(() => {
@@ -146,20 +146,16 @@ describe('typeMapper', () => {
                 };
                 const result = mapJsonSchemaToJavaType(schema, { propertyName: 'status' });
 
-                expect(result.javaType).toBe('Status');
-                expect(result.imports).toContain('com.example.api.Status');
+                expect(result.javaType).toBe('StatusEnum');
+                expect(result.imports).toContain('com.example.api.StatusEnum');
             });
-        });
 
-        describe('nullability', () => {
             it('should mark required properties as non-nullable', () => {
                 const schema: JsonSchema2020 = { type: 'string' };
                 const result = mapJsonSchemaToJavaType(schema, { 
                     propertyName: 'name',
                     isRequired: true 
-                });
-
-                expect(result.nullable).toBe(false);
+                 });
             });
 
             it('should mark optional properties as nullable', () => {

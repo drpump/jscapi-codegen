@@ -81,30 +81,29 @@ export function resolveDiscriminatorValue(
         return null;
       }
       
-      // Check if the discriminator property has a const/enum in this option
-    const discProperty = optionSchema.properties?.[strategy.propertyName] as JsonSchema2020;
-    if (!discProperty) {
-        return null;
-      }
-      
-      // Check for const value
-    if ('const' in discProperty) {
-        return (discProperty as any).const;
-      }
-      
-      // Check for single-value enum
-    if ('enum' in discProperty && (discProperty as any).enum.length === 1) {
-        return (discProperty as any).enum[0];
-      }
-      
-      // Check mapping from discriminator
+       // Check mapping first (before discProperty, since option may have no properties)
     if (strategy.mapping) {
         for (const [value, ref] of strategy.mapping.entries()) {
             if (ref.includes(optionName)) {
                 return value;
-              }
-          }
-      }
+               }
+           }
+       }
+      
+       // Check if the discriminator property has a const/enum in this option
+    const discProperty = optionSchema.properties?.[strategy.propertyName] as JsonSchema2020;
+    if (!discProperty) {
+        return null;
+       }
+      
+       // Check for const value
+    if ('const' in discProperty) {
+        return (discProperty as any).const;
+       }
+      
+       // Check for single-value enum
+    if ('enum' in discProperty && (discProperty as any).enum.length === 1) {
+        return (discProperty as any).enum[0];        }
       
     return null;
 }

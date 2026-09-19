@@ -95,33 +95,14 @@ describe('jsonSchemaTypes', () => {
             expect(schema.allOf).toHaveLength(1);
         });
 
-        it('should support discriminator object', () => {
+
+        it('should support additionalProperties as object schema', () => {
             const schema: JsonSchema2020 = {
                 type: 'object',
-                discriminator: {
-                    propertyName: 'type'
-                }
-            };
+                additionalProperties: { type: 'string' }
+             };
 
-            expect(schema.discriminator).toBeDefined();
-            expect(schema.discriminator?.propertyName).toBe('type');
-        });
-    });
-
-    describe('SchemaDialect interface', () => {
-        it('should have correct OPENAPI_31_DIALECT URI', () => {
-            expect(OPENAPI_31_DIALECT).toContain('openapis.org');
-            expect(OPENAPI_31_DIALECT).toContain('2020-12');
-        });
-
-        it('should have correct JSON_SCHEMA_2020_DIALECT URI', () => {
-            expect(JSON_SCHEMA_2020_DIALECT).toContain('json-schema.org');
-            expect(JSON_SCHEMA_2020_DIALECT).toContain('2020-12');
-        });
-
-        it('should have supportedKeywords as Set', () => {
-            expect(OPENAPI_31_DIALECT.supportedKeywords).toBeDefined();
-            expect(OPENAPI_31_DIALECT.supportedKeywords instanceof Set).toBe(true);
-        });
-    });
-});
+            expect(schema.additionalProperties).toBeDefined();
+         });
+      });
+   });

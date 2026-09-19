@@ -43,15 +43,36 @@ export function mapJsonSchemaToJavaType(
 
     switch (schema.type) {
         case 'integer':
+            // Check for format first (int32, int64)
+            const intFormatConverter = resolveIntFormatConverter(schema);
+            if (intFormatConverter) {
+                return {
+                    javaType: intFormatConverter.javaType,
+                    imports: intFormatConverter.imports,
+                    getterExpression: (prop) => generateGetterForPrimitive(prop, intFormatConverter.methodName),
+                    nullable: !context.isRequired
+                };
+            }
+            // Default: integer → Long
             return {
                 javaType: 'Long',
                 imports: [],
                 getterExpression: (prop) => generateGetterForPrimitive(prop, 'asLong'),
                 nullable: !context.isRequired
-             };
+            };
 
         case 'number':
-            // Use BigDecimal to preserve precision (important for financial data, etc.)
+            // Check for format first (float, double)
+            const numFormatConverter = resolveNumFormatConverter(schema);
+            if (numFormatConverter) {
+                return {
+                    javaType: numFormatConverter.javaType,
+                    imports: numFormatConverter.imports,
+                    getterExpression: (prop) => generateGetterForPrimitive(prop, numFormatConverter.methodName),
+                    nullable: !context.isRequired
+                };
+            }
+             // Default: number → BigDecimal to preserve precision
             return {
                 javaType: 'BigDecimal',
                 imports: ['java.math.BigDecimal'],
@@ -242,4 +263,67 @@ function generateGetterForPrimitive(propertyName: string, conversionMethod: stri
         if (node == null || node.isNull()) return null;
         return node.${conversionMethod}();
     `.trim();
+}
+// Integer format converters (int32 → Integer, int64 → Long)
+interface IntFormatMapping extends TypeMapping {
+    format: string;
+    methodName: string;
+}
+
+const INT_FORMAT_MAPPINGS: IntFormatMapping[] = [
+    { 
+        format: 'int64', 
+        javaType: 'Long', 
+        methodName: 'asLong',
+        imports: [],
+        getterExpression: (prop) => generateGetterForPrimitive(prop, 'asLong'),
+        nullable: false
+      },
+    { 
+        format: 'int32', 
+        javaType: 'Integer', 
+        methodName: 'asInt',
+        imports: [],
+        getterExpression: (prop) => generateGetterForPrimitive(prop, 'asInt'),
+        nullable: false
+      }
+];
+
+function resolveIntFormatConverter(schema: JsonSchema2020): IntFormatMapping | null {
+    if (schema.type !== 'integer') return null;
+    const format = schema.format;
+    if (!format) return null;
+    return INT_FORMAT_MAPPINGS.find(c => c.format === format) ?? null;
+}
+
+// Number format converters (float → Float, double → Double)
+interface NumFormatMapping extends TypeMapping {
+    format: string;
+    methodName: string;
+}
+
+const NUM_FORMAT_MAPPINGS: NumFormatMapping[] = [
+    { 
+        format: 'double', 
+        javaType: 'Double', 
+        methodName: 'asDouble',
+        imports: [],
+        getterExpression: (prop) => generateGetterForPrimitive(prop, 'asDouble'),
+        nullable: false
+      },
+    { 
+        format: 'float', 
+        javaType: 'Float', 
+        methodName: 'asFloat',
+        imports: [],
+        getterExpression: (prop) => generateGetterForPrimitive(prop, 'asFloat'),
+        nullable: false
+      }
+];
+
+function resolveNumFormatConverter(schema: JsonSchema2020): NumFormatMapping | null {
+    if (schema.type !== 'number') return null;
+    const format = schema.format;
+    if (!format) return null;
+    return NUM_FORMAT_MAPPINGS.find(c => c.format === format) ?? null;
 }

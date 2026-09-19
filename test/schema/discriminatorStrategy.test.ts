@@ -89,11 +89,11 @@ describe('discriminatorStrategy', () => {
                  $dynamicAnchor: '#cat'
               };
 
-               // Note: $dynamicAnchor detection requires discriminator property presence
-               // So this should fall through to structural-match
+                // $dynamicAnchor triggers explicit discriminator strategy
+                // for JSON Schema 2020-12 runtime polymorphism
             const result = detectDiscriminatorStrategy(schema, []);
             
-               expect(result.type).toBe('structural-match');
+               expect(result.type).toBe('explicit');
            });
        });
 

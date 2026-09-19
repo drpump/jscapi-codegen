@@ -190,9 +190,9 @@ export const KNOWN_DIALECTS: SchemaDialect[] = [
 /**
  * Detect which dialect a schema belongs to based on $schema URI or metadata.
  */
-export function detectDialect(schema: JsonSchema2020): SchemaDialect {
+export function detectDialect(schema: JsonSchema2020): SchemaDialect | null {
     if (!schema.$schema) {
-        return JSON_SCHEMA_2020_DIALECT;     // Default to pure JSON Schema
+        return null;              // No $schema means unknown dialect
     }
     
     const uri = schema.$schema.toLowerCase();
@@ -208,7 +208,7 @@ export function detectDialect(schema: JsonSchema2020): SchemaDialect {
     }
     
     // Unknown dialect - treat as base 2020-12 with potential extensions
-    return JSON_SCHEMA_2020_DIALECT;
+    return null;
 }
 
 // ============================================================================

@@ -2,8 +2,8 @@ import {
     generateImplementationClass, 
     generateOneOfImplementationClass, 
     generateAnyOfImplementationClass 
-} from '../../src/generators/java/implementationGenerator';
-import { PropertyGetter } from '../../src/generators/java/interfaceGenerator';
+} from '../../../src/generators/java/implementationGenerator';
+import { PropertyGetter } from '../../../src/generators/java/interfaceGenerator';
 
 describe('implementationGenerator', () => {
     const sampleGetters: PropertyGetter[] = [
