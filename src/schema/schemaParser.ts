@@ -64,7 +64,8 @@ export async function parseAndResolve(
       }
       
       // Derive name from filename
-      const name = path.basename(file).replace(/\.(json|yaml|yml)$/, '');
+      const rawName = path.basename(file).replace(/.(json|yaml|yml)$/, '');
+      const name = rawName.replace(/-([a-z])/g, (_, c) => c.toUpperCase()).replace(/^./, c => c.toUpperCase());
       combined.push({
         name,
         schema,
@@ -85,7 +86,8 @@ export async function parseAndResolve(
       schema = JSON.parse(content);
     }
     
-    const name = path.basename(entryPath).replace(/\.(json|yaml|yml)$/, '');
+    const rawName = path.basename(entryPath).replace(/.(json|yaml|yml)$/, '');
+    const name = rawName.replace(/-([a-z])/g, (_, c) => c.toUpperCase()).replace(/^./, c => c.toUpperCase());
     schemas = [{
       name,
       schema,

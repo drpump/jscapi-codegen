@@ -19,7 +19,7 @@ export function generateImplementationClass(
           * Default implementation of ${schemaName} backed by JsonNode.
            * Thread-safe and immutable after construction.
            */
-        static class ${schemaName}Impl implements ${schemaName} {
+        public class ${schemaName}Impl implements ${schemaName} {
 
              ${Array.from(propertyNames).sort().map(name => `private static final String PROP_${toConstant(name)} = "${name}";`).join('\n             ')}
 

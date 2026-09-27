@@ -5,7 +5,6 @@
     "description": "A person with basic identifying information",
     "type": "object",
     "required": ["firstName", "lastName"],
-    "additionalProperties": false,
     "properties": {
         "firstName": {
             "type": "string",
