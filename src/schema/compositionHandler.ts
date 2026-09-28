@@ -71,7 +71,17 @@ export function generateOptionName(
     index: number
 ): string {
       
-      // Use title if present
+      // Extract name from $ref if present (e.g., "#/$defs/TextContent" → "TextContent")
+    const ref = (schema as any)?.$ref;
+    if (typeof ref === 'string') {
+        // Use last slash for full path fragments like #/$defs/TextContent
+        const lastSlash = ref.lastIndexOf('/');
+        if (lastSlash !== -1) {
+            return capitalize(ref.slice(lastSlash + 1));
+        }
+    }
+
+    // Use title if present
     if (schema.title) {
         return capitalize(schema.title);
       }

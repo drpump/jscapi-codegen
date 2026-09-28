@@ -52,9 +52,19 @@ function flattenAllOfProperties(schema: JsonSchema2020): JsonSchema2020 {
 
   return {
     ...schema,
-    properties: Object.keys(mergedProperties).length > 0 ? mergedProperties : undefined,
-    required: mergedRequired.length > 0 ? mergedRequired : schema.required,
-  };
+    properties: { 
+      ...mergedProperties, 
+      ...(schema.properties || {}) 
+    },
+   };
+}
+
+/**
+ * Resolve a $ref reference against the root schema's $defs.
+ */
+function resolveRef(schema: JsonSchema2020, ref: string): JsonSchema2020 {
+  const defName = ref.split('/').pop()!;
+  return ((schema as any).$defs?.[defName]) ?? schema;
 }
 
 /**
@@ -127,33 +137,35 @@ function generateUnionCode(
 
   for (const option of composition.options) {
     const optionName = option.name;
-    const flattenedOption = flattenAllOfProperties(option.schema);
+      // Resolve $ref against root schema $defs before flattening
+    const resolvedSchema = option.schema.$ref ? resolveRef(schema, option.schema.$ref) : option.schema;
+    const flattenedOption = flattenAllOfProperties(resolvedSchema);
     const optionGetters = buildPropertyGetters(flattenedOption, optionName);
 
     variantInterfaces.set(
       optionName,
       generateInterfaceJava(optionName, optionGetters, undefined, false, undefined)
-    );
-  }
+       );
+     }
 
-  // Generate variant check methods for the union interface
-  const variantCheckMethods = composition.options
-    .map(opt => `  boolean is${opt.name}();`)
-    .join('\n');
+    // Generate variant check methods for the union interface
+    const variantCheckMethods = composition.options
+        .map(opt => `  boolean is${opt.name}();`)
+        .join('\n');
 
-  const interfaceCode = generateInterfaceJava(schemaName, [], undefined, false, undefined)
-    .replace(
-      'boolean hasProperty(String propertyName);',
-      variantCheckMethods + '\n  boolean hasProperty(String propertyName);'
-    );
-
-  // Generate the union implementation using AnyOf if it's anyOf, otherwise OneOf
+    const interfaceCode = generateInterfaceJava(schemaName, [], undefined, false, undefined)
+       .replace(
+         'boolean hasProperty(String propertyName);',
+        variantCheckMethods + '\n  boolean hasProperty(String propertyName);'
+       );
   let implementationCode: string;
   if (composition.type === 'anyOf') {
     const optionInterfaces = composition.options.map(opt => opt.name);
     const gettersByOption = new Map<string, PropertyGetter[]>();
     for (const opt of composition.options) {
-      const flattenedOpt = flattenAllOfProperties(opt.schema);
+      // Resolve $ref against root schema $defs before flattening
+      const resolvedOpt = opt.schema.$ref ? resolveRef(schema, opt.schema.$ref) : opt.schema;
+      const flattenedOpt = flattenAllOfProperties(resolvedOpt);
       gettersByOption.set(opt.name, buildPropertyGetters(flattenedOpt, opt.name));
       }
     implementationCode = generateAnyOfImplementationClass(
