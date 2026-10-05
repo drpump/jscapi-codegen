@@ -40,9 +40,19 @@ function flattenAllOfProperties(schema: JsonSchema2020): JsonSchema2020 {
 
   for (const option of schema.allOf) {
     if (typeof option === 'object' && option !== null) {
-      const objSchema = option as JsonSchema2020;
+      let objSchema = option as JsonSchema2020;
+      // Resolve $ref references before extracting properties
+      if (objSchema.$ref) {
+        objSchema = resolveRef(schema, objSchema.$ref);
+      }
       if (objSchema.properties) {
-        Object.assign(mergedProperties, objSchema.properties);
+        for (const [key, value] of Object.entries(objSchema.properties)) {
+          // Only replace existing if it has no type declaration - prefer typed over non-typed
+          const existing = mergedProperties[key];
+          if (!(existing && (existing as { type?: string }).type)) {
+            mergedProperties[key] = value;
+          }
+        }
       }
       if (Array.isArray(objSchema.required)) {
         mergedRequired.push(...objSchema.required);
@@ -52,24 +62,18 @@ function flattenAllOfProperties(schema: JsonSchema2020): JsonSchema2020 {
 
   return {
     ...schema,
-    properties: { 
-      ...mergedProperties, 
-      ...(schema.properties || {}) 
+    properties: {
+      ...mergedProperties,
+      ...(schema.properties || {}),
     },
-   };
+     * Resolve a $ref reference against the root schema's $defs.
+   */
+  function resolveRef(schema: JsonSchema2020, ref: string): JsonSchema2020 {
+    const defName = ref.split('/').pop()!;
+    return (schema.$defs as Record<string, JsonSchema2020>)?.[defName] ?? schema;
+  }
 }
 
-/**
- * Resolve a $ref reference against the root schema's $defs.
- */
-function resolveRef(schema: JsonSchema2020, ref: string): JsonSchema2020 {
-  const defName = ref.split('/').pop()!;
-  return ((schema as any).$defs?.[defName]) ?? schema;
-}
-
-/**
- * Build property getters for a schema, flattening embedded allOf if needed.
- */
 function buildPropertyGetters(schema: JsonSchema2020, schemaName: string): PropertyGetter[] {
   const flattened = flattenAllOfProperties(schema);
   return generatePropertyGetters(flattened, schemaName);
@@ -138,7 +142,7 @@ function generateUnionCode(
   for (const option of composition.options) {
     const optionName = option.name;
       // Resolve $ref against root schema $defs before flattening
-    const resolvedSchema = option.schema.$ref ? resolveRef(schema, option.schema.$ref) : option.schema;
+    const resolvedSchema = option.schema.$ref ? resolveRef(option.schema, option.schema.$ref) : option.schema;
     const flattenedOption = flattenAllOfProperties(resolvedSchema);
     const optionGetters = buildPropertyGetters(flattenedOption, optionName);
 
@@ -164,7 +168,7 @@ function generateUnionCode(
     const gettersByOption = new Map<string, PropertyGetter[]>();
     for (const opt of composition.options) {
       // Resolve $ref against root schema $defs before flattening
-      const resolvedOpt = opt.schema.$ref ? resolveRef(schema, opt.schema.$ref) : opt.schema;
+      const resolvedOpt = opt.schema.$ref ? resolveRef(opt.schema, opt.schema.$ref) : opt.schema;
       const flattenedOpt = flattenAllOfProperties(resolvedOpt);
       gettersByOption.set(opt.name, buildPropertyGetters(flattenedOpt, opt.name));
       }

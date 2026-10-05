@@ -107,34 +107,18 @@ describe('Java Integration Tests', () => {
             if (!javaAvailable()) {
                 return;
             }
-            
-            // Create a simple test driver that instantiates the generated classes
-            const testDriverPath = path.join(packageDir, 'TestDriver.java');
-            const testDriverCode = `
-package com.example.api;
 
-public class TestDriver {
-    public static void main(String[] args) throws Exception {
-        System.out.println("=== Person Java Integration Test ===");
-        
-        // Test 1: Interface exists and can be referenced
-        Person person = null;
-        System.out.println("Test 1 PASSED: Person interface is accessible");
-        
-        // Test 2: Basic getter methods exist (compile-time check)
-        String firstName = "Test";
-        System.out.println("Test 2 PASSED: Getters are callable");
-        
-        System.out.println("=== All Tests Passed ===");
-    }
-}
-`;
-            fs.writeFileSync(testDriverPath, testDriverCode);
-            
-            // Compile and run the test driver from temp dir root using absolute libs path
-            const compileCmd = `cd ${tempDir} && javac -cp ".:${libsDir}/*" com/example/api/TestDriver.java`;
+             // Copy test driver from fixtures into temp package directory
+            const fixtureDriverPath = path.join(
+                __dirname,
+                'com', 'example', 'api', 'TestDriver.java'
+             );
+            fs.copyFileSync(fixtureDriverPath, path.join(packageDir, 'TestDriver.java'));
+
+            // Compile the test driver alongside generated classes
+            const compileCmd = `cd ${tempDir} && javac -cp ".:${libsDir}/*" com/example/api/Person.java com/example/api/PersonImpl.java com/example/api/TestDriver.java`;
             execSync(compileCmd, { stdio: 'pipe', timeout: 30000 });
-            
+             // Run the test driver
             const runCmd = `cd ${tempDir} && java -cp ".:${libsDir}/*" com.example.api.TestDriver`;
             const output = execSync(runCmd, { encoding: 'utf-8', timeout: 30000 });
             

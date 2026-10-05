@@ -74,20 +74,9 @@ test-person: deps
 
 test-driver: test-person
 	@echo "=== Testing Driver Compilation ===" && \
-	cat > $(TEMP_DIR)/TestDriver.java <<'EOF' && \
-package com.example.api; \
-public class TestDriver { \
-    public static void main(String[] args) throws Exception { \
-        System.out.println("=== Person Java Integration Test ==="); \
-        Person person = null; \
-        System.out.println("Test 1 PASSED: Person interface is accessible"); \
-        String firstName = "Test"; \
-        System.out.println("Test 2 PASSED: Getters are callable"); \
-        System.out.println("=== All Tests Passed ==="); \
-    } \
-} \
-EOF && \
-	javac -cp "$(JARS):$(TEMP_DIR)" $(TEMP_DIR)/TestDriver.java && \
+	mkdir -p $(TEMP_DIR)/com/example/api && \
+	cp test/java/com/example/api/TestDriver.java $(TEMP_DIR)/com/example/api/ && \
+	javac -cp "$(JARS):$(TEMP_DIR)" $(TEMP_DIR)/com/example/api/TestDriver.java && \
 	java -cp ".:$(JARS):$(TEMP_DIR)" com.example.api.TestDriver
 
 test-junit: test-person
