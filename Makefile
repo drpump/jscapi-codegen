@@ -81,19 +81,17 @@ test-person: deps
 	sed 's/package PACKAGE_PLACEHOLDER;/package com.example.api;/' $(TEMP_DIR)/com/example/api/Person.java > $(TEMP_DIR)/com/example/api/Person.java.tmp && \
 	mv $(TEMP_DIR)/com/example/api/Person.java.tmp $(TEMP_DIR)/com/example/api/Person.java && \
 	node --require ts-node/register -e 'const fs = require("fs"); const { generateJsonNodeConverters } = require("./src/generators/java/jsonNodeConvertersGenerator"); fs.writeFileSync("$(TEMP_DIR)/com/example/api/JsonNodeConverters.java", generateJsonNodeConverters("com.example.api"));' && \
-	cp test/java/com/example/api/FactorySupport.java $(TEMP_DIR)/com/example/api/ && \
-	javac -cp "$(JARS):$(TEMP_DIR)" $(TEMP_DIR)/com/example/api/Person.java $(TEMP_DIR)/com/example/api/PersonImpl.java $(TEMP_DIR)/com/example/api/PersonFactory.java $(TEMP_DIR)/com/example/api/JsonNodeConverters.java $(TEMP_DIR)/com/example/api/FactorySupport.java && \
+	javac -cp "$(JARS):$(TEMP_DIR)" $(TEMP_DIR)/com/example/api/Person.java $(TEMP_DIR)/com/example/api/PersonImpl.java $(TEMP_DIR)/com/example/api/PersonFactory.java $(TEMP_DIR)/com/example/api/JsonNodeConverters.java $(TEMP_DIR)/com/example/api/SchemaRegistry.java $(TEMP_DIR)/com/example/api/CompositionValidator.java $(TEMP_DIR)/com/example/api/AnyOfMatchResult.java $(TEMP_DIR)/com/example/api/ValidationException.java $(TEMP_DIR)/com/example/api/JacksonMapper.java && \
 	echo "✓ Person schema compiled successfully"
 
 test-driver: test-person
 	@echo "=== Testing Driver Compilation ===" && \
 	mkdir -p $(TEMP_DIR)/com/example/api && \
-	cp test/java/com/example/api/TestDriver.java $(TEMP_DIR)/com/example/api/ && \
-	cp test/fixtures/person.json $(TEMP_DIR)/person.schema.json && \
+	cp test/java/com/example/api/PersonTestDriver.java $(TEMP_DIR)/com/example/api/ && \
 	cp test/fixtures/valid-person.json $(TEMP_DIR)/valid-person.json && \
 	cp test/fixtures/invalid-person.json $(TEMP_DIR)/invalid-person.json && \
-	javac -cp "$(JARS):$(TEMP_DIR)" $(TEMP_DIR)/com/example/api/TestDriver.java && \
-	cd $(TEMP_DIR) && java -cp ".:$(abspath $(LIBS_DIR))/*" com.example.api.TestDriver
+	javac -cp "$(JARS):$(TEMP_DIR)" $(TEMP_DIR)/com/example/api/PersonTestDriver.java && \
+	cd $(TEMP_DIR) && java -cp ".:$(abspath $(LIBS_DIR))/*" com.example.api.PersonTestDriver
 
 test-content-types: deps
 	@echo "=== Testing Content Types Schema Compilation and Runtime ===" && \
@@ -101,8 +99,6 @@ test-content-types: deps
 	npx ts-node src/main.ts generate --schema test/fixtures/content-types.json --output $(TEMP_DIR) && \
 	node --require ts-node/register -e 'const fs = require("fs"); const { generateJsonNodeConverters } = require("./src/generators/java/jsonNodeConvertersGenerator"); fs.writeFileSync("$(TEMP_DIR)/com/example/api/JsonNodeConverters.java", generateJsonNodeConverters("com.example.api"));' && \
 	cp test/java/com/example/api/ContentTypesTestDriver.java $(TEMP_DIR)/com/example/api/ && \
-	cp test/java/com/example/api/FactorySupport.java $(TEMP_DIR)/com/example/api/ && \
-	cp test/fixtures/content-types.json $(TEMP_DIR)/content-types.schema.json && \
 	cp test/fixtures/valid-content-types.json $(TEMP_DIR)/valid-content-types.json && \
 	cp test/fixtures/invalid-content-types.json $(TEMP_DIR)/invalid-content-types.json && \
 	javac -cp "$(JARS):$(TEMP_DIR)" \
@@ -116,7 +112,11 @@ test-content-types: deps
 		$(TEMP_DIR)/com/example/api/RichContentFormatting.java \
 		$(TEMP_DIR)/com/example/api/RichContentFormattingImpl.java \
 		$(TEMP_DIR)/com/example/api/JsonNodeConverters.java \
-		$(TEMP_DIR)/com/example/api/FactorySupport.java \
+		$(TEMP_DIR)/com/example/api/SchemaRegistry.java \
+		$(TEMP_DIR)/com/example/api/CompositionValidator.java \
+		$(TEMP_DIR)/com/example/api/AnyOfMatchResult.java \
+		$(TEMP_DIR)/com/example/api/ValidationException.java \
+		$(TEMP_DIR)/com/example/api/JacksonMapper.java \
 		$(TEMP_DIR)/com/example/api/ContentTypesTestDriver.java && \
 	cd $(TEMP_DIR) && java -cp ".:$(abspath $(LIBS_DIR))/*" com.example.api.ContentTypesTestDriver
 

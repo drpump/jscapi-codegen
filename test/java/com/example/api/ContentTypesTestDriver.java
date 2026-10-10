@@ -8,8 +8,6 @@ import java.nio.file.Path;
 public class ContentTypesTestDriver {
     public static void main(String[] args) throws Exception {
         ObjectMapper mapper = new ObjectMapper();
-        SchemaRegistry.load("ContentTypes", Path.of("content-types.schema.json"));
-
         JsonNode validJson = mapper.readTree(Path.of("valid-content-types.json").toFile());
 
         ContentTypes content = ContentTypesFactory.fromJsonNode(validJson);

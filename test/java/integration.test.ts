@@ -78,20 +78,16 @@ describe('Java Integration Tests', () => {
             const schema = JSON.parse(fs.readFileSync(path.join(fixturesDir, 'person.json'), 'utf-8'));
             const result = generateJavaFromSchema(schema, schemaName, 'com.example.api');
             
-            // Write interface and implementation
             packageDir = path.join(tempDir, 'com/example/api');
             fs.mkdirSync(packageDir, { recursive: true });
-            fs.writeFileSync(path.join(packageDir, `${schemaName}.java`), result.interfaceCode.replace('package PACKAGE_PLACEHOLDER;', 'package com.example.api;'));
-            fs.writeFileSync(path.join(packageDir, `${schemaName}Impl.java`), result.implementationCode.replace('package PACKAGE_PLACEHOLDER;', 'package com.example.api;').replace('PACKAGE_PLACEHOLDER.JsonNodeConverters;', 'com.example.api.JsonNodeConverters;'));
-            fs.writeFileSync(path.join(packageDir, `${schemaName}Factory.java`), result.factoryCode);
+            writeJavaFiles(result, tempDir, 'com.example.api');
+            fs.writeFileSync(
+                path.join(packageDir, `${schemaName}.java`),
+                result.interfaceCode.replace('package PACKAGE_PLACEHOLDER;', 'package com.example.api;')
+            );
             // Write the JsonNodeConverters utility class (required by generated code)
             const convertersCode = generateJsonNodeConverters('com.example.api');
             fs.writeFileSync(path.join(packageDir, 'JsonNodeConverters.java'), convertersCode);
-            fs.copyFileSync(
-                path.join(__dirname, 'com', 'example', 'api', 'FactorySupport.java'),
-                path.join(packageDir, 'FactorySupport.java')
-            );
-            fs.copyFileSync(path.join(fixturesDir, 'person.json'), path.join(tempDir, 'person.schema.json'));
             fs.copyFileSync(path.join(fixturesDir, 'valid-person.json'), path.join(tempDir, 'valid-person.json'));
             fs.copyFileSync(path.join(fixturesDir, 'invalid-person.json'), path.join(tempDir, 'invalid-person.json'));
         }, 30000);
@@ -123,15 +119,15 @@ describe('Java Integration Tests', () => {
              // Copy test driver from fixtures into temp package directory
             const fixtureDriverPath = path.join(
                 __dirname,
-                'com', 'example', 'api', 'TestDriver.java'
+                'com', 'example', 'api', 'PersonTestDriver.java'
              );
-            fs.copyFileSync(fixtureDriverPath, path.join(packageDir, 'TestDriver.java'));
+            fs.copyFileSync(fixtureDriverPath, path.join(packageDir, 'PersonTestDriver.java'));
             // Compile the test driver alongside generated classes
-            const compileCmd = `cd ${tempDir} && javac -cp ".:${libsDir}/*" com/example/api/Person.java com/example/api/PersonImpl.java com/example/api/PersonFactory.java com/example/api/JsonNodeConverters.java com/example/api/FactorySupport.java com/example/api/TestDriver.java`;
+            const compileCmd = `cd ${tempDir} && javac -cp ".:${libsDir}/*" com/example/api/Person.java com/example/api/PersonImpl.java com/example/api/PersonFactory.java com/example/api/JsonNodeConverters.java com/example/api/SchemaRegistry.java com/example/api/CompositionValidator.java com/example/api/AnyOfMatchResult.java com/example/api/ValidationException.java com/example/api/JacksonMapper.java com/example/api/PersonTestDriver.java`;
             execSync(compileCmd, { stdio: 'pipe', timeout: 30000 });
 
              // Run the test driver
-            const runCmd = `cd ${tempDir} && java -cp ".:${libsDir}/*" com.example.api.TestDriver`;
+            const runCmd = `cd ${tempDir} && java -cp ".:${libsDir}/*" com.example.api.PersonTestDriver`;
             const output = execSync(runCmd, { encoding: 'utf-8', timeout: 30000 });
             
             expect(output).toContain('PASSED');
@@ -241,11 +237,6 @@ describe('Java Integration Tests', () => {
                 path.join(__dirname, 'com', 'example', 'api', 'ContentTypesTestDriver.java'),
                 path.join(packageDir, 'ContentTypesTestDriver.java')
             );
-            fs.copyFileSync(
-                path.join(__dirname, 'com', 'example', 'api', 'FactorySupport.java'),
-                path.join(packageDir, 'FactorySupport.java')
-            );
-            fs.copyFileSync(path.join(fixturesDir, 'content-types.json'), path.join(tempDir, 'content-types.schema.json'));
             fs.copyFileSync(path.join(fixturesDir, 'valid-content-types.json'), path.join(tempDir, 'valid-content-types.json'));
             fs.copyFileSync(path.join(fixturesDir, 'invalid-content-types.json'), path.join(tempDir, 'invalid-content-types.json'));
 
@@ -260,7 +251,11 @@ describe('Java Integration Tests', () => {
                 'RichContentFormatting.java',
                 'RichContentFormattingImpl.java',
                 'JsonNodeConverters.java',
-                'FactorySupport.java',
+                'SchemaRegistry.java',
+                'CompositionValidator.java',
+                'AnyOfMatchResult.java',
+                'ValidationException.java',
+                'JacksonMapper.java',
                 'ContentTypesTestDriver.java',
             ].map(file => `com/example/api/${file}`).join(' ');
             execSync(`cd ${tempDir} && javac -cp ".:${libsDir}/*" ${sources}`, { stdio: 'pipe', timeout: 30000 });

@@ -7,6 +7,7 @@ import { generateImplementationClass, generateOneOfImplementationClass, generate
 import { generateFactoryClass } from './factoryGenerator';
 import { generateJsonNodeConverters } from './jsonNodeConvertersGenerator';
 import { analyzeComposition, CompositionInfo } from '../../schema/compositionHandler';
+import { generateJavaSupportFiles } from './supportGenerator';
 
 /**
  * Result of generating Java code for a schema.
@@ -16,6 +17,7 @@ export interface CodeGenerationResult {
   interfaceCode: string;
   implementationCode: string;
   factoryCode: string;
+  schemaJson?: string;
   /** Variant interfaces for composition types (allOf, oneOf, anyOf). */
   variantInterfaces?: Map<string, string>;
 }
@@ -279,20 +281,25 @@ export function generateJavaFromSchema(
   // Detect composition keywords and dispatch to the appropriate generator
   const composition = analyzeComposition(schema, schemaName);
 
+  let result: CodeGenerationResult;
   if (composition) {
     switch (composition.type) {
       case 'allOf':
-        return generateAllOfCode(schema, schemaName, composition, packageName);
+        result = generateAllOfCode(schema, schemaName, composition, packageName);
+        break;
       case 'oneOf':
       case 'anyOf':
-        return generateUnionCode(schema, schemaName, composition, packageName);
+        result = generateUnionCode(schema, schemaName, composition, packageName);
+        break;
       default:
+        result = generateObjectCode(schema, schemaName, packageName);
         break;
     }
+  } else {
+    result = generateObjectCode(schema, schemaName, packageName);
   }
-
-  // Simple object — no composition keywords
-  return generateObjectCode(schema, schemaName, packageName);
+  result.schemaJson = JSON.stringify(schema, null, 2);
+  return result;
 }
 
 /**
@@ -325,6 +332,14 @@ export function writeJavaFiles(
       const variantPath = javaPackageDir + '/' + variantName + '.java';
       fs.writeFileSync(variantPath, variantCode);
     }
+  }
+
+  if (result.schemaJson) {
+    fs.writeFileSync(javaPackageDir + '/' + result.schemaName + '.schema.json', result.schemaJson);
+  }
+
+  for (const [supportName, supportCode] of generateJavaSupportFiles(packageName)) {
+    fs.writeFileSync(javaPackageDir + '/' + supportName + '.java', supportCode);
   }
 }
 

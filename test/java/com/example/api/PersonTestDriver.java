@@ -8,13 +8,11 @@ import java.nio.file.Path;
 /**
  * Driver that verifies generated Java classes can validate and read JSON data.
  */
-public class TestDriver {
+public class PersonTestDriver {
     public static void main(String[] args) throws Exception {
         System.out.println("=== Person Java Integration Test ===");
 
         ObjectMapper mapper = new ObjectMapper();
-        SchemaRegistry.load("Person", Path.of("person.schema.json"));
-
         JsonNode validJson = mapper.readTree(Path.of("valid-person.json").toFile());
         Person person = PersonFactory.fromJsonNode(validJson);
         check("John".equals(person.getFirstName()), "firstName getter");

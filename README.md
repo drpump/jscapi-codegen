@@ -32,4 +32,4 @@ TBD.
 * The generator is a TypeScript CLI. TypeScript is used due to the native JSON object representation and support for JSON schema tooling.
 * A separate code generator per-target is defined, with the initial target being Java (21 or higher). 
 * The Java target uses Jackson for serialization/deserialization and the networknt package for validation against schemas
-
+* Generated Java packages include the source schemas as classpath resources and the schema-registry and validation support used by generated factories. Keep the generated package resources on the runtime classpath when using a factory.

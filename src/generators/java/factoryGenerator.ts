@@ -92,7 +92,7 @@ function generateOneOfFactory(
     composition: CompositionInfo,
     packageName: string
 ): string {
-    const optionSchemaDecls = composition.options.map((opt, i) => `private static final JsonSchema OPTION_${i}_SCHEMA = SchemaRegistry.get("${opt.name}");`).join('\n        ');
+    const optionSchemaDecls = composition.options.map((opt, i) => `private static final JsonSchema OPTION_${i}_SCHEMA = SchemaRegistry.get("${schemaName}", "${opt.name}");`).join('\n        ');
     const schemaList = composition.options.map((_, i) => `OPTION_${i}_SCHEMA`).join(', ');
     const switchCases = composition.options.map(opt => `case ${opt.index} -> return new ${opt.name}Impl(jsonNode);`).join('\n            ');
 
@@ -149,7 +149,7 @@ function generateAnyOfFactory(
     composition: CompositionInfo,
     packageName: string
 ): string {
-    const optionSchemaDecls = composition.options.map((opt, i) => `private static final JsonSchema OPTION_${i}_SCHEMA = SchemaRegistry.get("${opt.name}");`).join('\n        ');
+    const optionSchemaDecls = composition.options.map((opt, i) => `private static final JsonSchema OPTION_${i}_SCHEMA = SchemaRegistry.get("${schemaName}", "${opt.name}");`).join('\n        ');
     const schemaList = composition.options.map((_, i) => `OPTION_${i}_SCHEMA`).join(', ');
 
     return dedent`
