@@ -60,17 +60,29 @@ function generateSchemaRegistry(packageName: string): string {
             JsonSchema schema;
             if (rootName.equals(schemaName)) {
                 schema = FACTORY.getSchema(root);
+            } else if (root.path("$defs").has(schemaName)) {
+                ObjectNode scopedRoot = root.deepCopy();
+                ArrayNode options = MAPPER.createArrayNode();
+                options.add(MAPPER.createObjectNode().put("$ref", "#/$defs/" + schemaName));
+                scopedRoot.set("anyOf", options);
+                schema = FACTORY.getSchema(scopedRoot);
             } else {
-                JsonNode definitions = root.path("$defs");
-                if (!definitions.has(schemaName)) {
+                JsonNode option = null;
+                for (JsonNode candidate : root.path("oneOf")) {
+                    if (schemaName.equals(candidate.path("title").asText())) {
+                        option = candidate;
+                        break;
+                    }
+                }
+                if (option == null) {
                     throw new IllegalArgumentException(
                         "Schema '" + schemaName + "' is not defined in '" + rootName + "'"
                     );
                 }
                 ObjectNode scopedRoot = root.deepCopy();
                 ArrayNode options = MAPPER.createArrayNode();
-                options.add(MAPPER.createObjectNode().put("$ref", "#/$defs/" + schemaName));
-                scopedRoot.set("anyOf", options);
+                options.add(option.deepCopy());
+                scopedRoot.set("oneOf", options);
                 schema = FACTORY.getSchema(scopedRoot);
             }
             synchronized (NAMES) {
@@ -118,6 +130,22 @@ function generateCompositionValidator(packageName: string): string {
                 throw new ValidationException("JSON does not match any anyOf schema");
             }
             return new AnyOfMatchResult(matches);
+        }
+
+        int validateOneOf(JsonNode node, List<JsonSchema> schemas) {
+            int matchedIndex = -1;
+            for (int index = 0; index < schemas.size(); index++) {
+                if (schemas.get(index).validate(node).isEmpty()) {
+                    if (matchedIndex >= 0) {
+                        throw new ValidationException("JSON matches more than one oneOf schema");
+                    }
+                    matchedIndex = index;
+                }
+            }
+            if (matchedIndex < 0) {
+                throw new ValidationException("JSON does not match any oneOf schema");
+            }
+            return matchedIndex;
         }
     }
   `;

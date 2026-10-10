@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/schemas/audit-event",
+  "title": "AuditEvent",
+  "allOf": [
+    { "$ref": "event-base.json" },
+    {
+      "type": "object",
+      "properties": {
+        "action": { "type": "string" }
+      },
+      "required": ["action"]
+    }
+  ]
+}

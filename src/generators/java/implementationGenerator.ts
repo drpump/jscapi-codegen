@@ -10,7 +10,8 @@ import { PropertyGetter } from './interfaceGenerator';
 export function generateImplementationClass(
     schemaName: string,
     packageName: string,
-    getters: PropertyGetter[]
+    getters: PropertyGetter[],
+    baseClass?: string
 ): string {
     const propertyNames = new Set(getters.map(g => g.propertyName));
 
@@ -27,13 +28,14 @@ export function generateImplementationClass(
            */
         package ${packageName};
 
-        ${importBlock}public class ${schemaName}Impl implements ${schemaName} {
+        ${importBlock}public class ${schemaName}Impl${baseClass ? ` extends ${baseClass}` : ''} implements ${schemaName} {
 
              ${Array.from(propertyNames).sort().map(name => `private static final String PROP_${toConstant(name)} = "${name}";`).join('\n             ')}
 
             private final com.fasterxml.jackson.databind.JsonNode jsonNode;
 
              ${schemaName}Impl(com.fasterxml.jackson.databind.JsonNode jsonNode) {
+                ${baseClass ? 'super(jsonNode);' : ''}
                 this.jsonNode = java.util.Objects.requireNonNull(jsonNode, "jsonNode must not be null");
                }
 
@@ -117,7 +119,8 @@ export function generateAnyOfImplementationClass(
     schemaName: string,
     packageName: string,
     optionInterfaces: string[],
-    gettersByOption: Map<string, PropertyGetter[]>
+    gettersByOption: Map<string, PropertyGetter[]>,
+    baseClass?: string
 ): string {
     const implementsList = [schemaName, ...optionInterfaces].join(', ');
 
@@ -137,12 +140,13 @@ export function generateAnyOfImplementationClass(
     return dedent`
           package ${packageName};
 
-          ${importBlock}public final class ${schemaName}Impl implements ${implementsList} {
+          ${importBlock}public final class ${schemaName}Impl${baseClass ? ` extends ${baseClass}` : ''} implements ${implementsList} {
 
               private final com.fasterxml.jackson.databind.JsonNode jsonNode;
               private final java.util.Set<String> satisfiedSchemas;
 
                ${schemaName}Impl(com.fasterxml.jackson.databind.JsonNode jsonNode, java.util.List<String> matchedIndices) {
+                  ${baseClass ? 'super(jsonNode);' : ''}
                   this.jsonNode = java.util.Objects.requireNonNull(jsonNode, "jsonNode must not be null");
                   this.satisfiedSchemas = new java.util.HashSet<>(matchedIndices);
                  }

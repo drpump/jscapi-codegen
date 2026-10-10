@@ -1,0 +1,10 @@
+{
+  "timestamp": "2026-10-10T10:00:00Z",
+  "source": "identity-service",
+  "userId": "ddeb27fb-d9a0-4624-be4d-4615062daed4",
+  "eventType": "USER_CREATED",
+  "profile": {
+    "email": "jane.doe@example.com",
+    "displayName": "Jane Doe"
+  }
+}

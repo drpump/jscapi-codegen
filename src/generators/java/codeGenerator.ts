@@ -1,4 +1,5 @@
 import * as fs from 'fs';
+import * as path from 'path';
 import dedent from 'dedent';
 import { JsonSchema2020 } from '../../schema/jsonSchemaTypes';
 import { mapJsonSchemaToJavaType, TypeMappingContext } from './typeMapper';
@@ -31,6 +32,11 @@ export interface CodeGenerationOptions {
   outputDir?: string;
 }
 
+export interface CodeGenerationContext {
+  sharedReferences?: Set<string>;
+  referenceSchemas?: Map<string, JsonSchema2020>;
+}
+
 /**
  * Flatten properties from embedded allOf options into a single merged schema.
  * This fixes the case where variant interfaces (e.g., RichContent) have
@@ -39,7 +45,8 @@ export interface CodeGenerationOptions {
 function flattenAllOfProperties(
   schema: JsonSchema2020,
   rootSchema: JsonSchema2020 = schema,
-  resolvedRefs: Set<string> = new Set()
+  resolvedRefs: Set<string> = new Set(),
+  context: CodeGenerationContext = {}
 ): JsonSchema2020 {
   if (!schema.allOf || schema.allOf.length === 0) return schema;
 
@@ -51,11 +58,13 @@ function flattenAllOfProperties(
       // Resolve $ref references before extracting properties
       let objSchema = option as JsonSchema2020;
       if (objSchema.$ref) {
+        const refName = referenceName(objSchema.$ref);
+        if (context.sharedReferences?.has(refName)) continue;
         if (resolvedRefs.has(objSchema.$ref)) continue;
         resolvedRefs.add(objSchema.$ref);
-        objSchema = resolveRef(rootSchema, objSchema.$ref);
+        objSchema = resolveRef(rootSchema, objSchema.$ref, context.referenceSchemas);
       }
-      objSchema = flattenAllOfProperties(objSchema, rootSchema, new Set(resolvedRefs));
+      objSchema = flattenAllOfProperties(objSchema, rootSchema, new Set(resolvedRefs), context);
       if (objSchema.properties) {
         for (const [key, value] of Object.entries(objSchema.properties)) {
           // Only replace existing if it has no type declaration - prefer typed over non-typed
@@ -84,9 +93,18 @@ function flattenAllOfProperties(
 /**
  * Resolve a $ref reference against the root schema's $defs.
  */
-function resolveRef(schema: JsonSchema2020, ref: string): JsonSchema2020 {
+function resolveRef(
+  schema: JsonSchema2020,
+  ref: string,
+  referenceSchemas?: Map<string, JsonSchema2020>
+): JsonSchema2020 {
   const defName = ref.split('/').pop()!;
-  return ((schema as any).$defs?.[defName]) ?? schema;
+  const local = (schema as any).$defs?.[defName];
+  if (local) return local;
+  const targetName = referenceName(ref);
+  return referenceSchemas?.get(targetName)
+    ?? referenceSchemas?.get(defName)
+    ?? schema;
 }
 
 /**
@@ -95,9 +113,10 @@ function resolveRef(schema: JsonSchema2020, ref: string): JsonSchema2020 {
 function buildPropertyGetters(
   schema: JsonSchema2020,
   schemaName: string,
-  rootSchema: JsonSchema2020 = schema
+  rootSchema: JsonSchema2020 = schema,
+  context: CodeGenerationContext = {}
 ): PropertyGetter[] {
-  const flattened = flattenAllOfProperties(schema, rootSchema);
+  const flattened = flattenAllOfProperties(schema, rootSchema, new Set(), context);
   return generatePropertyGetters(flattened, schemaName);
 }
 
@@ -107,9 +126,10 @@ function buildPropertyGetters(
 function generateObjectCode(
   schema: JsonSchema2020,
   schemaName: string,
-  packageName: string
+  packageName: string,
+  context: CodeGenerationContext
 ): CodeGenerationResult {
-  const propertyGetters = buildPropertyGetters(schema, schemaName);
+  const propertyGetters = buildPropertyGetters(schema, schemaName, schema, context);
 
   return {
     schemaName,
@@ -122,33 +142,40 @@ function generateObjectCode(
 }
 
 /**
- * Generate code for an allOf composition.
- * Finds the first $ref as an extends interface and merges properties from all options.
+ * Generate code for an allOf composition, using an interface hierarchy for shared references.
  */
 function generateAllOfCode(
   schema: JsonSchema2020,
   schemaName: string,
   composition: CompositionInfo,
-  packageName: string
+  packageName: string,
+  context: CodeGenerationContext
 ): CodeGenerationResult {
   // Find the first $ref option to use as extends interface
   let extendsInterface: string | undefined;
   for (const option of composition.options) {
     if (option.schema.$ref) {
-      const refParts = option.schema.$ref.split('/');
-      extendsInterface = refParts[refParts.length - 1];
+      const refName = referenceName(option.schema.$ref);
+      if (context.sharedReferences?.has(refName)) {
+        extendsInterface = refName;
+      }
       break;
     }
   }
 
   // Merge all properties from all options
-  const flattened = flattenAllOfProperties(schema);
-  const propertyGetters = buildPropertyGetters(flattened, schemaName);
+  const flattened = flattenAllOfProperties(schema, schema, new Set(), context);
+  const propertyGetters = buildPropertyGetters(flattened, schemaName, schema, context);
 
   return {
     schemaName,
     interfaceCode: generateInterfaceJava(schemaName, propertyGetters, extendsInterface, false, undefined),
-    implementationCode: generateImplementationClass(schemaName, packageName, propertyGetters)
+    implementationCode: generateImplementationClass(
+      schemaName,
+      packageName,
+      propertyGetters,
+      extendsInterface ? `${extendsInterface}Impl` : undefined
+    )
 ,
     factoryCode: generateFactoryClass(schemaName, true, packageName, composition),
   };
@@ -160,7 +187,8 @@ function generateAllOfCode(
 function generateUnionInterface(
   schemaName: string,
   optionNames: string[],
-  packageName: string
+  packageName: string,
+  extendsInterfaces: string[] = []
 ): string {
   return dedent`
     package ${packageName};
@@ -168,7 +196,7 @@ function generateUnionInterface(
     /**
      * Union interface for ${schemaName} variants.
      */
-    public interface ${schemaName} {
+    public interface ${schemaName}${extendsInterfaces.length ? ` extends ${extendsInterfaces.join(', ')}` : ''} {
       ${optionNames.map(name => `public java.util.Optional<${name}> as${name}();`).join('\n      ')}
       ${optionNames.map(name => `public boolean is${capitalize(name)}();`).join('\n      ')}
     }
@@ -183,27 +211,43 @@ function generateUnionCode(
   schema: JsonSchema2020,
   schemaName: string,
   composition: CompositionInfo,
-  packageName: string
+  packageName: string,
+  context: CodeGenerationContext
 ): CodeGenerationResult {
   // Generate variant interfaces for each option
   const variantInterfaces = new Map<string, string>();
   const optionNames: string[] = [];
   const gettersByOption = new Map<string, PropertyGetter[]>();
   const flattenedOptions = new Map<string, JsonSchema2020>();
+  const sharedParentInterfaces = (schema.allOf || [])
+    .filter(option => !!option.$ref)
+    .map(option => referenceName(option.$ref!))
+    .filter(name => context.sharedReferences?.has(name));
 
   for (const option of composition.options) {
     const optionName = option.name;
     optionNames.push(optionName);
     // Resolve $ref against root schema $defs before flattening
-    const resolvedSchema = option.schema.$ref ? resolveRef(schema, option.schema.$ref) : option.schema;
-    const flattenedOption = flattenAllOfProperties(resolvedSchema, schema);
-    const optionGetters = buildPropertyGetters(flattenedOption, optionName, schema);
+    const resolvedSchema = option.schema.$ref
+      ? resolveRef(schema, option.schema.$ref, context.referenceSchemas)
+      : option.schema;
+    const schemaToFlatten = composition.type === 'oneOf'
+      ? {
+          ...schema,
+          ...resolvedSchema,
+          allOf: schema.allOf,
+          properties: resolvedSchema.properties,
+          required: resolvedSchema.required,
+        } as JsonSchema2020
+      : resolvedSchema;
+    const flattenedOption = flattenAllOfProperties(schemaToFlatten, schema, new Set(), context);
+    const optionGetters = buildPropertyGetters(flattenedOption, optionName, schema, context);
     flattenedOptions.set(optionName, flattenedOption);
     gettersByOption.set(optionName, optionGetters);
 
     variantInterfaces.set(
       optionName,
-      generateInterfaceJava(optionName, optionGetters).replace(
+      generateInterfaceJava(optionName, optionGetters, sharedParentInterfaces).replace(
         'package PACKAGE_PLACEHOLDER;',
         `package ${packageName};`
       )
@@ -218,12 +262,13 @@ function generateUnionCode(
 
   return {
     schemaName,
-    interfaceCode: generateUnionInterface(schemaName, optionNames, packageName),
+    interfaceCode: generateUnionInterface(schemaName, optionNames, packageName, sharedParentInterfaces),
     implementationCode: generateAnyOfImplementationClass(
       schemaName,
       packageName,
       optionNames,
-      gettersByOption
+      gettersByOption,
+      sharedParentInterfaces[0] ? `${sharedParentInterfaces[0]}Impl` : undefined
     ),
     variantInterfaces,
     factoryCode: generateFactoryClass(schemaName, true, packageName, composition),
@@ -276,7 +321,8 @@ function generateNestedObjectFiles(
 export function generateJavaFromSchema(
   schema: JsonSchema2020,
   schemaName: string,
-  packageName = 'com.example.api'
+  packageName = 'com.example.api',
+  context: CodeGenerationContext = {}
 ): CodeGenerationResult {
   // Detect composition keywords and dispatch to the appropriate generator
   const composition = analyzeComposition(schema, schemaName);
@@ -285,18 +331,18 @@ export function generateJavaFromSchema(
   if (composition) {
     switch (composition.type) {
       case 'allOf':
-        result = generateAllOfCode(schema, schemaName, composition, packageName);
+        result = generateAllOfCode(schema, schemaName, composition, packageName, context);
         break;
       case 'oneOf':
       case 'anyOf':
-        result = generateUnionCode(schema, schemaName, composition, packageName);
+        result = generateUnionCode(schema, schemaName, composition, packageName, context);
         break;
       default:
-        result = generateObjectCode(schema, schemaName, packageName);
+        result = generateObjectCode(schema, schemaName, packageName, context);
         break;
     }
   } else {
-    result = generateObjectCode(schema, schemaName, packageName);
+    result = generateObjectCode(schema, schemaName, packageName, context);
   }
   result.schemaJson = JSON.stringify(schema, null, 2);
   return result;
@@ -316,7 +362,10 @@ export function writeJavaFiles(
 
   // Write main interface
   const interfacePath = javaPackageDir + '/' + result.schemaName + '.java';
-  fs.writeFileSync(interfacePath, result.interfaceCode);
+  fs.writeFileSync(
+    interfacePath,
+    result.interfaceCode.replace('package PACKAGE_PLACEHOLDER;', `package ${packageName};`)
+  );
 
   // Write implementation
   const implPath = javaPackageDir + '/' + result.schemaName + 'Impl.java';
@@ -352,39 +401,48 @@ export async function generateJavaFromSchemaFile(
   outputDir: string,
   packageName: string = 'com.example.api'
 ): Promise<void> {
-  const fsMod = await import('fs');
-  const pathMod = await import('path');
-
-  if (!fsMod.existsSync(schemaPath)) {
+  if (!fs.existsSync(schemaPath)) {
     throw new Error(`Schema path does not exist: ${schemaPath}`);
   }
+  const { parseAndResolve } = await import('../../schema/schemaParser');
+  const parsedSchemas = await parseAndResolve(schemaPath);
+  const referenceSchemas = new Map<string, JsonSchema2020>();
+  for (const parsedSchema of parsedSchemas) {
+    referenceSchemas.set(parsedSchema.name, parsedSchema.schema as JsonSchema2020);
+    referenceSchemas.set(
+      path.basename(parsedSchema.sourceFile || parsedSchema.name).replace(/\.(json|yaml|yml)$/, ''),
+      parsedSchema.schema as JsonSchema2020
+    );
+  }
+  const context: CodeGenerationContext = {
+    referenceSchemas,
+    sharedReferences: new Set(
+      parsedSchemas.filter(parsedSchema => (parsedSchema.refCount || 1) > 1).map(parsedSchema => parsedSchema.name)
+    ),
+  };
 
-  const schema: JsonSchema2020 = JSON.parse(fsMod.readFileSync(schemaPath, 'utf-8'));
-  const schemaName = schema.title || pathMod.basename(schemaPath, '.json');
-
-  // Determine if this is part of a multi-schema generation
-  const isDir = fsMod.statSync(schemaPath).isDirectory();
-
-  if (isDir) {
-    // Directory: process all JSON files
-    const files = fsMod.readdirSync(schemaPath).filter(f => f.endsWith('.json'));
-    for (const file of files) {
-      const filePath = pathMod.join(schemaPath, file);
-      const result = generateJavaFromSchema(
-        JSON.parse(fsMod.readFileSync(filePath, 'utf-8')) as JsonSchema2020,
-        file.replace('.json', ''),
-        packageName
-      );
-      writeJavaFiles(result, outputDir, packageName);
-    }
-  } else {
-    const result = generateJavaFromSchema(schema, schemaName, packageName);
+  for (const parsedSchema of parsedSchemas) {
+    const result = generateJavaFromSchema(
+      parsedSchema.schema as JsonSchema2020,
+      parsedSchema.name,
+      packageName,
+      context
+    );
+    result.schemaJson = parsedSchema.runtimeSchemaJson || JSON.stringify(parsedSchema.schema, null, 2);
     writeJavaFiles(result, outputDir, packageName);
   }
 }
 
 function capitalize(str: string): string {
   return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+function referenceName(ref: string): string {
+  const target = ref.split(/[\/#]/).pop() || ref;
+  const withoutExtension = target.replace(/\.(json|yaml|yml)$/i, '');
+  return withoutExtension
+    .replace(/-([a-z])/g, (_, character: string) => character.toUpperCase())
+    .replace(/^./, character => character.toUpperCase());
 }
 
 function toCamelCase(str: string): string {

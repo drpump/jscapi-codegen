@@ -20,6 +20,8 @@ export interface ParsedSchema {
   refCount?: number;
   /** Source file path if external */
   sourceFile?: string;
+  /** Self-contained schema JSON for generated runtime validation. */
+  runtimeSchemaJson?: string;
 }
 
 export interface SchemaParseResult {
@@ -37,7 +39,7 @@ export interface SchemaParseResult {
 
 /**
  * Parse and resolve a JSON Schema file or directory.
- * Uses $RefParser.parse() + resolve() ONLY (never bundle/dereference).
+ * Resolves external schemas while retaining their original references for generation.
  */
 export async function parseAndResolve(
   entryPath: string,
@@ -71,29 +73,39 @@ export async function parseAndResolve(
         schema,
         isTopLevel: true,
         sourceFile: file,
+        runtimeSchemaJson: JSON.stringify(await $RefParser.bundle(file), null, 2),
       });
     }
     
     schemas = combined;
   } else {
-    // Single file mode
-    const content = fs.readFileSync(entryPath, 'utf-8');
-    let schema: any;
-    
-    if (entryPath.endsWith('.yaml') || entryPath.endsWith('.yml')) {
-      schema = require('js-yaml').load(content);
-    } else {
-      schema = JSON.parse(content);
+    const absoluteEntryPath = path.resolve(entryPath);
+    const refs = await $RefParser.resolve(absoluteEntryPath);
+    schemas = refs.paths().map(sourceFile => {
+      const schema = refs.get(sourceFile) as JsonSchema2020;
+      const name = schema.title || path.basename(sourceFile).replace(/\.(json|yaml|yml)$/, '')
+        .replace(/-([a-z])/g, (_, c) => c.toUpperCase())
+        .replace(/^./, c => c.toUpperCase());
+      return {
+        name,
+        schema,
+        isTopLevel: sourceFile === absoluteEntryPath,
+        sourceFile,
+        runtimeSchemaJson: JSON.stringify(
+          sourceFile === absoluteEntryPath ? undefined : schema,
+          null,
+          2
+        ),
+      };
+    });
+    const rootSchema = schemas.find(schema => schema.sourceFile === absoluteEntryPath);
+    if (rootSchema) {
+      rootSchema.runtimeSchemaJson = JSON.stringify(
+        await $RefParser.bundle(absoluteEntryPath),
+        null,
+        2
+      );
     }
-    
-    const rawName = path.basename(entryPath).replace(/.(json|yaml|yml)$/, '');
-    const name = rawName.replace(/-([a-z])/g, (_, c) => c.toUpperCase()).replace(/^./, c => c.toUpperCase());
-    schemas = [{
-      name,
-      schema,
-      isTopLevel: true,
-      sourceFile: entryPath,
-    }];
   }
 
   // Collect full registry for reference counting
@@ -207,18 +219,27 @@ function performReferenceCounting(
   schemas: ParsedSchema[],
   registry: SchemaRegistry,
 ): ParsedSchema[] {
-  // Count references to each schema across the entire codebase
-  const refCounts = new Map<string, number>();
+  const schemasByPath = new Map(
+    schemas
+      .filter(parsed => parsed.sourceFile)
+      .map(parsed => [path.resolve(parsed.sourceFile!), parsed])
+  );
+  const schemasById = new Map(
+    schemas
+      .filter(parsed => parsed.schema.$id)
+      .map(parsed => [parsed.schema.$id as string, parsed])
+  );
+  const refOwners = new Map<string, Set<string>>();
   
   for (const parsed of schemas) {
-    countReferencesInSchema(parsed.schema as any, refCounts);
+    const owner = parsed.sourceFile ? path.resolve(parsed.sourceFile) : parsed.name;
+    countReferencesInSchema(parsed.schema as any, parsed.sourceFile, owner, schemasByPath, schemasById, refOwners);
   }
   
   // Update each schema with its reference count
   const result: ParsedSchema[] = [];
   for (const parsed of schemas) {
-    const key = parsed.schema.$id || parsed.name;
-    const count = refCounts.get(key) || 1;
+    const count = refOwners.get(parsed.name)?.size || 1;
     
     result.push({
       ...parsed,
@@ -234,14 +255,27 @@ function performReferenceCounting(
  */
 function countReferencesInSchema(
   schema: any,
-  refCounts: Map<string, number>,
+  sourceFile: string | undefined,
+  owner: string,
+  schemasByPath: Map<string, ParsedSchema>,
+  schemasById: Map<string, ParsedSchema>,
+  refOwners: Map<string, Set<string>>,
 ): void {
   if (!schema || typeof schema !== 'object') return;
   
   // Handle $ref targets
   if (schema.$ref) {
-    const refTarget = schema.$ref.split('/').pop() || schema.$ref;
-    refCounts.set(refTarget, (refCounts.get(refTarget) || 0) + 1);
+    const ref = schema.$ref as string;
+    const targetPath = sourceFile && !ref.startsWith('#') && !/^[a-z]+:/i.test(ref)
+      ? path.resolve(path.dirname(sourceFile), ref.split('#')[0])
+      : undefined;
+    const target = (targetPath && schemasByPath.get(targetPath))
+      || schemasById.get(ref.split('#')[0]);
+    if (target) {
+      const owners = refOwners.get(target.name) || new Set<string>();
+      owners.add(owner);
+      refOwners.set(target.name, owners);
+    }
     return;
   }
   
@@ -249,7 +283,7 @@ function countReferencesInSchema(
   for (const keyword of ['allOf', 'oneOf', 'anyOf']) {
     if (Array.isArray(schema[keyword])) {
       for (const subSchema of schema[keyword]) {
-        countReferencesInSchema(subSchema, refCounts);
+        countReferencesInSchema(subSchema, sourceFile, owner, schemasByPath, schemasById, refOwners);
       }
     }
   }
@@ -257,19 +291,19 @@ function countReferencesInSchema(
   // Recurse into properties
   if (schema.properties) {
     for (const propSchema of Object.values(schema.properties)) {
-      countReferencesInSchema(propSchema as any, refCounts);
+      countReferencesInSchema(propSchema as any, sourceFile, owner, schemasByPath, schemasById, refOwners);
     }
   }
   
   // Recurse into items
   if (schema.items) {
-    countReferencesInSchema(schema.items as any, refCounts);
+    countReferencesInSchema(schema.items as any, sourceFile, owner, schemasByPath, schemasById, refOwners);
   }
   
   // Recurse into definitions
   if (schema.definitions) {
     for (const defSchema of Object.values(schema.definitions)) {
-      countReferencesInSchema(defSchema as any, refCounts);
+      countReferencesInSchema(defSchema as any, sourceFile, owner, schemasByPath, schemasById, refOwners);
     }
   }
 }

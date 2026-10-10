@@ -7,6 +7,7 @@ TEMP_DIR       := .temp-test-java
 JACKSON_VER    := 2.18.0
 SNAKEYAML_VER  := 2.2
 SCHEMA_VER     := 1.0.87
+ITU_VER        := 1.7.0
 JUNIT_VER       := 5.11.3
 JUNIT_PLATFORM_VER := 1.11.3
 MAVEN_CENTRAL   := https://repo.maven.apache.org/maven2
@@ -20,6 +21,7 @@ DEPS = $(LIBS_DIR)/jackson-annotations-$(JACKSON_VER).jar \
           $(LIBS_DIR)/slf4j-api-2.0.16.jar \
           $(LIBS_DIR)/slf4j-simple-2.0.16.jar \
           $(LIBS_DIR)/json-schema-validator-$(SCHEMA_VER).jar \
+          $(LIBS_DIR)/itu-$(ITU_VER).jar \
           $(LIBS_DIR)/junit-jupiter-api-$(JUNIT_VER).jar \
           $(LIBS_DIR)/junit-jupiter-engine-$(JUNIT_VER).jar \
            $(LIBS_DIR)/junit-platform-commons-$(JUNIT_PLATFORM_VER).jar \
@@ -56,6 +58,9 @@ $(LIBS_DIR)/slf4j-simple-2.0.16.jar: | $(LIBS_DIR)
 $(LIBS_DIR)/json-schema-validator-$(SCHEMA_VER).jar: | $(LIBS_DIR)
 	curl -f -L "$(MAVEN_CENTRAL)/com/networknt/json-schema/$(SCHEMA_VER)/json-schema-$(SCHEMA_VER).jar" -o $@
 
+$(LIBS_DIR)/itu-$(ITU_VER).jar: | $(LIBS_DIR)
+	curl -f -L "$(MAVEN_CENTRAL)/com/ethlo/time/itu/$(ITU_VER)/itu-$(ITU_VER).jar" -o $@
+
 $(LIBS_DIR)/junit-jupiter-api-$(JUNIT_VER).jar: | $(LIBS_DIR)
 	curl -f -L "$(MAVEN_CENTRAL)/org/junit/jupiter/junit-jupiter-api/$(JUNIT_VER)/junit-jupiter-api-$(JUNIT_VER).jar" -o $@
 
@@ -72,7 +77,7 @@ $(LIBS_DIR)/opentest4j-1.3.0.jar: | $(LIBS_DIR)
 	curl -f -L "$(MAVEN_CENTRAL)/org/opentest4j/opentest4j/1.3.0/opentest4j-1.3.0.jar" -o $@
 
 # Main test target
-test-java: setup test-person test-driver test-content-types
+test-java: setup test-person test-driver test-content-types test-user-events
 
 test-person: deps
 	@echo "=== Testing Person Schema Compilation ===" && \
@@ -121,6 +126,36 @@ test-content-types: deps
 		$(TEMP_DIR)/com/example/api/JacksonMapper.java \
 		$(TEMP_DIR)/com/example/api/ContentTypesTestDriver.java && \
 	cd $(TEMP_DIR) && java -cp ".:$(abspath $(LIBS_DIR))/*" com.example.api.ContentTypesTestDriver
+
+test-user-events: deps
+	@echo "=== Testing User Events Schema Compilation and Runtime ===" && \
+	mkdir -p $(TEMP_DIR)/user-events/com/example/api $(TEMP_DIR)/user-events/json-data && \
+	npx ts-node src/main.ts generate --schema test/fixtures/schemas --output $(TEMP_DIR)/user-events && \
+	node --require ts-node/register -e 'const fs = require("fs"); const { generateJsonNodeConverters } = require("./src/generators/java/jsonNodeConvertersGenerator"); fs.writeFileSync("$(TEMP_DIR)/user-events/com/example/api/JsonNodeConverters.java", generateJsonNodeConverters("com.example.api"));' && \
+	cp test/java/com/example/api/UserEventsTestDriver.java $(TEMP_DIR)/user-events/com/example/api/ && \
+	cp test/fixtures/json-data/valid-user-events.json $(TEMP_DIR)/user-events/json-data/valid-user-events.json && \
+	cp test/fixtures/json-data/invalid-user-events.json $(TEMP_DIR)/user-events/json-data/invalid-user-events.json && \
+	javac -cp "$(JARS):$(TEMP_DIR)/user-events" \
+		$(TEMP_DIR)/user-events/com/example/api/EventBase.java \
+		$(TEMP_DIR)/user-events/com/example/api/EventBaseImpl.java \
+		$(TEMP_DIR)/user-events/com/example/api/UserEvents.java \
+		$(TEMP_DIR)/user-events/com/example/api/UserEventsImpl.java \
+		$(TEMP_DIR)/user-events/com/example/api/UserEventsFactory.java \
+		$(TEMP_DIR)/user-events/com/example/api/UserCreatedEvent.java \
+		$(TEMP_DIR)/user-events/com/example/api/UserUpdatedEvent.java \
+		$(TEMP_DIR)/user-events/com/example/api/UserDeletedEvent.java \
+		$(TEMP_DIR)/user-events/com/example/api/UserCreatedEventProfile.java \
+		$(TEMP_DIR)/user-events/com/example/api/UserCreatedEventProfileImpl.java \
+		$(TEMP_DIR)/user-events/com/example/api/UserUpdatedEventChanges.java \
+		$(TEMP_DIR)/user-events/com/example/api/UserUpdatedEventChangesImpl.java \
+		$(TEMP_DIR)/user-events/com/example/api/JsonNodeConverters.java \
+		$(TEMP_DIR)/user-events/com/example/api/SchemaRegistry.java \
+		$(TEMP_DIR)/user-events/com/example/api/CompositionValidator.java \
+		$(TEMP_DIR)/user-events/com/example/api/AnyOfMatchResult.java \
+		$(TEMP_DIR)/user-events/com/example/api/ValidationException.java \
+		$(TEMP_DIR)/user-events/com/example/api/JacksonMapper.java \
+		$(TEMP_DIR)/user-events/com/example/api/UserEventsTestDriver.java && \
+	cd $(TEMP_DIR)/user-events && java -cp ".:$(abspath $(LIBS_DIR))/*" com.example.api.UserEventsTestDriver
 
 test-junit: test-person
 	@echo "=== Compiling JUnit Tests ===" && \

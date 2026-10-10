@@ -212,7 +212,9 @@ function mapObjectType(schema: JsonSchema2020, context: TypeMappingContext): Typ
         imports: [`${PACKAGE_NAME}.${capitalized}`],
         getterExpression: (prop) => `
             JsonNode node = jsonNode.get("${prop}");
-            if (node == null || node.isNull()) return ${context.isRequired ? `throw new IllegalStateException("Required property '${prop}' is missing")` : 'null'};
+            if (node == null || node.isNull()) {
+                ${context.isRequired ? `throw new IllegalStateException("Required property '${prop}' is missing");` : 'return null;'}
+            }
             return new ${capitalized}Impl(node);
         `.trim(),
         nullable: !context.isRequired

@@ -1,8 +1,9 @@
 import { execSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
-import { generateJavaFromSchema, writeJavaFiles } from '../../src/generators/java/codeGenerator';
+import { CodeGenerationContext, generateJavaFromSchema, writeJavaFiles } from '../../src/generators/java/codeGenerator';
 import { generateJsonNodeConverters } from '../../src/generators/java/jsonNodeConvertersGenerator';
+import { parseAndResolve } from '../../src/schema/schemaParser';
 
 describe('Java Integration Tests', () => {
     const projectRoot = path.join(__dirname, '..', '..');
@@ -31,7 +32,7 @@ describe('Java Integration Tests', () => {
         const hasJava = javaAvailable();
         console.log(`Java integration tests: ${hasJava ? 'ENABLED' : 'SKIPPED (Java not found)'}`);
     });
-    
+
     afterAll(() => {
         // Cleanup temp directory
         if (fs.existsSync(tempDir)) {
@@ -311,6 +312,73 @@ describe('Java Integration Tests', () => {
             expect(result.implementationCode).toContain('videoUrl');
             expect(result.implementationCode).toContain('durationSeconds');
         });
+    });
+
+    describe('User Events oneOf Schema', () => {
+        it('should validate user events and reject events missing inherited required fields', async () => {
+            if (!javaAvailable()) {
+                return;
+            }
+
+            const parsedSchemas = await parseAndResolve(schemasDir);
+            const parsedSchema = parsedSchemas.find(candidate => candidate.name === 'UserEvents');
+            const baseSchema = parsedSchemas.find(candidate => candidate.name === 'EventBase');
+            expect(parsedSchema).toBeDefined();
+            expect(baseSchema).toBeDefined();
+            expect(parsedSchema!.refCount).toBe(1);
+            expect(baseSchema!.refCount).toBeGreaterThan(1);
+            const referenceSchemas = new Map<string, any>();
+            for (const candidate of parsedSchemas) {
+                referenceSchemas.set(candidate.name, candidate.schema);
+                referenceSchemas.set(path.basename(candidate.sourceFile || candidate.name).replace(/\.(json|yaml|yml)$/, ''), candidate.schema);
+            }
+            const context: CodeGenerationContext = {
+                referenceSchemas,
+                sharedReferences: new Set(
+                    parsedSchemas.filter(candidate => (candidate.refCount || 1) > 1).map(candidate => candidate.name)
+                ),
+            };
+            const baseResult = generateJavaFromSchema(baseSchema!.schema, 'EventBase', 'com.example.api', context);
+            baseResult.schemaJson = baseSchema!.runtimeSchemaJson;
+            writeJavaFiles(baseResult, tempDir, 'com.example.api');
+            const result = generateJavaFromSchema(parsedSchema!.schema, 'UserEvents', 'com.example.api', context);
+            result.schemaJson = parsedSchema!.runtimeSchemaJson;
+            writeJavaFiles(result, tempDir, 'com.example.api');
+            expect(result.interfaceCode).toContain('interface UserEvents extends EventBase');
+            expect(result.implementationCode).toContain('UserEventsImpl extends EventBaseImpl');
+            expect(result.variantInterfaces?.get('UserCreatedEvent')).toContain('interface UserCreatedEvent extends EventBase');
+            expect(result.variantInterfaces?.get('UserCreatedEvent')).not.toContain('getEventId()');
+            const auditSchema = parsedSchemas.find(candidate => candidate.name === 'AuditEvent');
+            const auditResult = generateJavaFromSchema(auditSchema!.schema, 'AuditEvent', 'com.example.api', context);
+            expect(auditResult.interfaceCode).toContain('interface AuditEvent extends EventBase');
+            expect(auditResult.interfaceCode).not.toContain('getEventId()');
+            expect(auditResult.implementationCode).toContain('AuditEventImpl extends EventBaseImpl');
+            expect(auditResult.implementationCode).not.toContain('getEventId()');
+
+            const packageDir = path.join(tempDir, 'com/example/api');
+            fs.writeFileSync(
+                path.join(packageDir, 'JsonNodeConverters.java'),
+                generateJsonNodeConverters('com.example.api')
+            );
+            fs.copyFileSync(
+                path.join(__dirname, 'com', 'example', 'api', 'UserEventsTestDriver.java'),
+                path.join(packageDir, 'UserEventsTestDriver.java')
+            );
+            const jsonDataTempDir = path.join(tempDir, 'json-data');
+            fs.mkdirSync(jsonDataTempDir, { recursive: true });
+            fs.copyFileSync(path.join(jsonDataDir, 'valid-user-events.json'), path.join(jsonDataTempDir, 'valid-user-events.json'));
+            fs.copyFileSync(path.join(jsonDataDir, 'invalid-user-events.json'), path.join(jsonDataTempDir, 'invalid-user-events.json'));
+
+            execSync(`cd ${tempDir} && javac -cp ".:${libsDir}/*" com/example/api/*.java`, { stdio: 'pipe', timeout: 30000 });
+
+            const output = execSync(
+                `cd ${tempDir} && java -cp ".:${libsDir}/*" com.example.api.UserEventsTestDriver`,
+                { encoding: 'utf-8', timeout: 30000 }
+            );
+            expect(output).toContain('Valid user event creates the expected variant');
+            expect(output).toContain('UserEvents factory rejects invalid JSON');
+            expect(output).toContain('All User Events Tests Passed');
+        }, 30000);
     });
 
     describe('Polymorphism Composition Test', () => {

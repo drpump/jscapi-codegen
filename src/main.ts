@@ -9,7 +9,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { parseAndResolve, ParsedSchema } from './schema/schemaParser';
 import { collectAllSchemas, SchemaRegistry } from './schema/refCollector';
-import { generateJavaFromSchema, writeJavaFiles } from './generators/java/codeGenerator';
+import { CodeGenerationContext, generateJavaFromSchema, writeJavaFiles } from './generators/java/codeGenerator';
 import { JsonSchema2020 } from './schema/jsonSchemaTypes';
 
 const program = new Command();
@@ -61,7 +61,18 @@ program
       fs.mkdirSync(absOutputDir, { recursive: true });
 
        // Generate code for each schema using the shared pipeline
-      for (const parsedSchema of parsedSchemas) {
+       const referenceSchemas = new Map<string, JsonSchema2020>();
+       for (const parsedSchema of parsedSchemas) {
+         const schema = parsedSchema.schema as JsonSchema2020;
+         referenceSchemas.set(parsedSchema.name, schema);
+         referenceSchemas.set(path.basename(parsedSchema.sourceFile || parsedSchema.name).replace(/\.(json|yaml|yml)$/, ''), schema);
+       }
+       const sharedReferences = new Set(
+         parsedSchemas.filter(parsedSchema => (parsedSchema.refCount || 1) > 1).map(parsedSchema => parsedSchema.name)
+       );
+       const codeGenerationContext: CodeGenerationContext = { referenceSchemas, sharedReferences };
+
+       for (const parsedSchema of parsedSchemas) {
         const schema = parsedSchema.schema as JsonSchema2020;
         const javaPackageName = (packageName || 'com.example.api').replace(/\./g, '/');
         const outputPackageDir = path.join(absOutputDir, javaPackageName);
@@ -72,7 +83,13 @@ program
         console.log(`\nGenerating code for: ${parsedSchema.name}`);
 
          // Use the single top-level generation function — wraps the full pipeline
-        const result = generateJavaFromSchema(schema, parsedSchema.name, packageName || 'com.example.api');
+        const result = generateJavaFromSchema(
+          schema,
+          parsedSchema.name,
+          packageName || 'com.example.api',
+          codeGenerationContext
+        );
+        result.schemaJson = parsedSchema.runtimeSchemaJson || JSON.stringify(schema, null, 2);
         writeJavaFiles(result, outputDir, packageName || 'com.example.api');
 
         console.log(`   ✓ Interface: ${outputPackageDir}/${parsedSchema.name}.java`);

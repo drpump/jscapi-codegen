@@ -94,7 +94,9 @@ function generateOneOfFactory(
 ): string {
     const optionSchemaDecls = composition.options.map((opt, i) => `private static final JsonSchema OPTION_${i}_SCHEMA = SchemaRegistry.get("${schemaName}", "${opt.name}");`).join('\n        ');
     const schemaList = composition.options.map((_, i) => `OPTION_${i}_SCHEMA`).join(', ');
-    const switchCases = composition.options.map(opt => `case ${opt.index} -> return new ${opt.name}Impl(jsonNode);`).join('\n            ');
+    const switchCases = composition.options.map(opt =>
+        `case ${opt.index}: return new ${schemaName}Impl(jsonNode, List.of("${opt.name}"));`
+    ).join('\n            ');
 
     return dedent`
          /*
@@ -120,11 +122,11 @@ function generateOneOfFactory(
             public static ${schemaName} fromJsonNode(JsonNode jsonNode) {
                 java.util.List<JsonSchema> schemas = List.of(${schemaList});
                 CompositionValidator validator = new CompositionValidator();
-                OneOfMatchResult result = validator.validateOneOf(jsonNode, schemas);
+                int matchedOptionIndex = validator.validateOneOf(jsonNode, schemas);
 
-                switch (result.matchedOptionIndex()) {
+                switch (matchedOptionIndex) {
                     ${switchCases}
-                    default -> throw new ValidationException("Unknown matching option in oneOf");
+                    default: throw new ValidationException("Unknown matching option in oneOf");
                   }
                 }
 
@@ -137,7 +139,7 @@ function generateOneOfFactory(
                   } catch (ValidationException e) {
                      // Log warning and allow through for backwards compatibility
                     System.err.println("WARNING: JSON does not match any oneOf schema: " + e.getMessage());
-                    return new ${schemaName}Impl(jsonNode);
+                    return new ${schemaName}Impl(jsonNode, List.of());
                   }
                 }
             }
