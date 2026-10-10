@@ -86,6 +86,9 @@ describe('Java Integration Tests', () => {
             // Write the JsonNodeConverters utility class (required by generated code)
             const convertersCode = generateJsonNodeConverters('com.example.api');
             fs.writeFileSync(path.join(packageDir, 'JsonNodeConverters.java'), convertersCode);
+            fs.copyFileSync(path.join(fixturesDir, 'person.json'), path.join(tempDir, 'person.schema.json'));
+            fs.copyFileSync(path.join(fixturesDir, 'valid-person.json'), path.join(tempDir, 'valid-person.json'));
+            fs.copyFileSync(path.join(fixturesDir, 'invalid-person.json'), path.join(tempDir, 'invalid-person.json'));
         }, 30000);
         
         it('should compile generated interface and implementation', () => {
