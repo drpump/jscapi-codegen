@@ -30,7 +30,7 @@ describe('factoryGenerator', () => {
         it('should use JsonSchema validation', () => {
             const code = generateFactoryClass('Person', false, packageName);
             expect(code).toContain('com.networknt.schema.JsonSchema');
-            expect(code).toContain('SCHEMA.validate(jsonNode, com.networknt.schema.InputFormat.JSON)');
+            expect(code).toContain('SCHEMA.validate(jsonNode)');
            });
 
         it('should throw ValidationException on invalid JSON', () => {

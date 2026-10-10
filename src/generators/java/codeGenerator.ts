@@ -34,7 +34,11 @@ export interface CodeGenerationOptions {
  * This fixes the case where variant interfaces (e.g., RichContent) have
  * their properties defined within an allOf structure rather than at the top level.
  */
-function flattenAllOfProperties(schema: JsonSchema2020): JsonSchema2020 {
+function flattenAllOfProperties(
+  schema: JsonSchema2020,
+  rootSchema: JsonSchema2020 = schema,
+  resolvedRefs: Set<string> = new Set()
+): JsonSchema2020 {
   if (!schema.allOf || schema.allOf.length === 0) return schema;
 
   const mergedProperties: Record<string, any> = {};
@@ -45,8 +49,11 @@ function flattenAllOfProperties(schema: JsonSchema2020): JsonSchema2020 {
       // Resolve $ref references before extracting properties
       let objSchema = option as JsonSchema2020;
       if (objSchema.$ref) {
-        objSchema = resolveRef(schema, objSchema.$ref);
+        if (resolvedRefs.has(objSchema.$ref)) continue;
+        resolvedRefs.add(objSchema.$ref);
+        objSchema = resolveRef(rootSchema, objSchema.$ref);
       }
+      objSchema = flattenAllOfProperties(objSchema, rootSchema, new Set(resolvedRefs));
       if (objSchema.properties) {
         for (const [key, value] of Object.entries(objSchema.properties)) {
           // Only replace existing if it has no type declaration - prefer typed over non-typed
@@ -68,6 +75,7 @@ function flattenAllOfProperties(schema: JsonSchema2020): JsonSchema2020 {
       ...mergedProperties, 
       ...(schema.properties || {}) 
     },
+    required: Array.from(new Set([...(schema.required || []), ...mergedRequired])),
   };
 }
 
@@ -82,8 +90,12 @@ function resolveRef(schema: JsonSchema2020, ref: string): JsonSchema2020 {
 /**
  * Build property getters for a schema, flattening embedded allOf if needed.
  */
-function buildPropertyGetters(schema: JsonSchema2020, schemaName: string): PropertyGetter[] {
-  const flattened = flattenAllOfProperties(schema);
+function buildPropertyGetters(
+  schema: JsonSchema2020,
+  schemaName: string,
+  rootSchema: JsonSchema2020 = schema
+): PropertyGetter[] {
+  const flattened = flattenAllOfProperties(schema, rootSchema);
   return generatePropertyGetters(flattened, schemaName);
 }
 
@@ -145,9 +157,12 @@ function generateAllOfCode(
  */
 function generateUnionInterface(
   schemaName: string,
-  optionNames: string[]
+  optionNames: string[],
+  packageName: string
 ): string {
   return dedent`
+    package ${packageName};
+
     /**
      * Union interface for ${schemaName} variants.
      */
@@ -172,30 +187,36 @@ function generateUnionCode(
   const variantInterfaces = new Map<string, string>();
   const optionNames: string[] = [];
   const gettersByOption = new Map<string, PropertyGetter[]>();
+  const flattenedOptions = new Map<string, JsonSchema2020>();
 
   for (const option of composition.options) {
     const optionName = option.name;
     optionNames.push(optionName);
     // Resolve $ref against root schema $defs before flattening
     const resolvedSchema = option.schema.$ref ? resolveRef(schema, option.schema.$ref) : option.schema;
-    const flattenedOption = flattenAllOfProperties(resolvedSchema);
-    const optionGetters = buildPropertyGetters(flattenedOption, optionName);
+    const flattenedOption = flattenAllOfProperties(resolvedSchema, schema);
+    const optionGetters = buildPropertyGetters(flattenedOption, optionName, schema);
+    flattenedOptions.set(optionName, flattenedOption);
     gettersByOption.set(optionName, optionGetters);
 
     variantInterfaces.set(
       optionName,
-      generateOneOfImplementationClass(
-        optionName,
-        schemaName,
-        packageName,
-        optionGetters
+      generateInterfaceJava(optionName, optionGetters).replace(
+        'package PACKAGE_PLACEHOLDER;',
+        `package ${packageName};`
       )
     );
   }
 
+  for (const [optionName, optionSchema] of flattenedOptions) {
+    for (const [nestedName, nestedCode] of generateNestedObjectFiles(optionSchema, optionName, packageName)) {
+      variantInterfaces.set(nestedName, nestedCode);
+    }
+  }
+
   return {
     schemaName,
-    interfaceCode: generateUnionInterface(schemaName, optionNames),
+    interfaceCode: generateUnionInterface(schemaName, optionNames, packageName),
     implementationCode: generateAnyOfImplementationClass(
       schemaName,
       packageName,
@@ -203,8 +224,41 @@ function generateUnionCode(
       gettersByOption
     ),
     variantInterfaces,
-    factoryCode: generateFactoryClass(schemaName, false, packageName),
+    factoryCode: generateFactoryClass(schemaName, true, packageName, composition),
   };
+}
+
+function generateNestedObjectFiles(
+  schema: JsonSchema2020,
+  parentName: string,
+  packageName: string
+): Map<string, string> {
+  const files = new Map<string, string>();
+  if (!schema.properties) return files;
+
+  for (const [propertyName, propertySchemaValue] of Object.entries(schema.properties)) {
+    const propertySchema = propertySchemaValue as JsonSchema2020;
+    if (propertySchema.type !== 'object' || !propertySchema.properties) continue;
+
+    const nestedName = propertySchema.title || `${parentName}${capitalize(propertyName)}`;
+    const nestedGetters = buildPropertyGetters(propertySchema, nestedName);
+    files.set(
+      nestedName,
+      generateInterfaceJava(nestedName, nestedGetters).replace(
+        'package PACKAGE_PLACEHOLDER;',
+        `package ${packageName};`
+      )
+    );
+    files.set(
+      `${nestedName}Impl`,
+      generateImplementationClass(nestedName, packageName, nestedGetters)
+    );
+
+    for (const [childName, childCode] of generateNestedObjectFiles(propertySchema, nestedName, packageName)) {
+      files.set(childName, childCode);
+    }
+  }
+  return files;
 }
 
 /**

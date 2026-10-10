@@ -72,7 +72,7 @@ $(LIBS_DIR)/opentest4j-1.3.0.jar: | $(LIBS_DIR)
 	curl -f -L "$(MAVEN_CENTRAL)/org/opentest4j/opentest4j/1.3.0/opentest4j-1.3.0.jar" -o $@
 
 # Main test target
-test-java: setup test-person test-driver
+test-java: setup test-person test-driver test-content-types
 
 test-person: deps
 	@echo "=== Testing Person Schema Compilation ===" && \
@@ -81,7 +81,8 @@ test-person: deps
 	sed 's/package PACKAGE_PLACEHOLDER;/package com.example.api;/' $(TEMP_DIR)/com/example/api/Person.java > $(TEMP_DIR)/com/example/api/Person.java.tmp && \
 	mv $(TEMP_DIR)/com/example/api/Person.java.tmp $(TEMP_DIR)/com/example/api/Person.java && \
 	node --require ts-node/register -e 'const fs = require("fs"); const { generateJsonNodeConverters } = require("./src/generators/java/jsonNodeConvertersGenerator"); fs.writeFileSync("$(TEMP_DIR)/com/example/api/JsonNodeConverters.java", generateJsonNodeConverters("com.example.api"));' && \
-	javac -cp "$(JARS):$(TEMP_DIR)" $(TEMP_DIR)/com/example/api/Person.java $(TEMP_DIR)/com/example/api/PersonImpl.java && \
+	cp test/java/com/example/api/FactorySupport.java $(TEMP_DIR)/com/example/api/ && \
+	javac -cp "$(JARS):$(TEMP_DIR)" $(TEMP_DIR)/com/example/api/Person.java $(TEMP_DIR)/com/example/api/PersonImpl.java $(TEMP_DIR)/com/example/api/PersonFactory.java $(TEMP_DIR)/com/example/api/JsonNodeConverters.java $(TEMP_DIR)/com/example/api/FactorySupport.java && \
 	echo "✓ Person schema compiled successfully"
 
 test-driver: test-person
@@ -94,6 +95,31 @@ test-driver: test-person
 	javac -cp "$(JARS):$(TEMP_DIR)" $(TEMP_DIR)/com/example/api/TestDriver.java && \
 	cd $(TEMP_DIR) && java -cp ".:$(abspath $(LIBS_DIR))/*" com.example.api.TestDriver
 
+test-content-types: deps
+	@echo "=== Testing Content Types Schema Compilation and Runtime ===" && \
+	mkdir -p $(TEMP_DIR)/com/example/api && \
+	npx ts-node src/main.ts generate --schema test/fixtures/content-types.json --output $(TEMP_DIR) && \
+	node --require ts-node/register -e 'const fs = require("fs"); const { generateJsonNodeConverters } = require("./src/generators/java/jsonNodeConvertersGenerator"); fs.writeFileSync("$(TEMP_DIR)/com/example/api/JsonNodeConverters.java", generateJsonNodeConverters("com.example.api"));' && \
+	cp test/java/com/example/api/ContentTypesTestDriver.java $(TEMP_DIR)/com/example/api/ && \
+	cp test/java/com/example/api/FactorySupport.java $(TEMP_DIR)/com/example/api/ && \
+	cp test/fixtures/content-types.json $(TEMP_DIR)/content-types.schema.json && \
+	cp test/fixtures/valid-content-types.json $(TEMP_DIR)/valid-content-types.json && \
+	cp test/fixtures/invalid-content-types.json $(TEMP_DIR)/invalid-content-types.json && \
+	javac -cp "$(JARS):$(TEMP_DIR)" \
+		$(TEMP_DIR)/com/example/api/ContentTypes.java \
+		$(TEMP_DIR)/com/example/api/ContentTypesFactory.java \
+		$(TEMP_DIR)/com/example/api/ContentTypesImpl.java \
+		$(TEMP_DIR)/com/example/api/TextContent.java \
+		$(TEMP_DIR)/com/example/api/RichContent.java \
+		$(TEMP_DIR)/com/example/api/ImageContent.java \
+		$(TEMP_DIR)/com/example/api/VideoContent.java \
+		$(TEMP_DIR)/com/example/api/RichContentFormatting.java \
+		$(TEMP_DIR)/com/example/api/RichContentFormattingImpl.java \
+		$(TEMP_DIR)/com/example/api/JsonNodeConverters.java \
+		$(TEMP_DIR)/com/example/api/FactorySupport.java \
+		$(TEMP_DIR)/com/example/api/ContentTypesTestDriver.java && \
+	cd $(TEMP_DIR) && java -cp ".:$(abspath $(LIBS_DIR))/*" com.example.api.ContentTypesTestDriver
+
 test-junit: test-person
 	@echo "=== Compiling JUnit Tests ===" && \
 	mkdir -p $(TEMP_DIR)/test-classes && \
@@ -101,7 +127,8 @@ test-junit: test-person
 		-cp "$(JARS):$(TEMP_DIR)" \
 		-p $(TEMP_DIR) \
 		-d $(TEMP_DIR)/test-classes \
-		test/java/com/example/api/*.java && \
+		test/java/com/example/api/JsonNodeBuilder.java \
+		test/java/com/example/api/PersonTest.java && \
 	echo "✓ Tests compiled successfully" && \
 	echo "=== Running JUnit 5 Tests ===" && \
 	java --enable-preview --release 11 \

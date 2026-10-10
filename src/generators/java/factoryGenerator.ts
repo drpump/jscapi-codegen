@@ -41,9 +41,9 @@ function generateSimpleFactory(schemaName: string, packageName: string): string 
               * Creates a ${schemaName} from a validated JsonNode.
                */
             public static ${schemaName} fromJsonNode(JsonNode jsonNode) {
-                Set<ValidationMessage> errors = SCHEMA.validate(jsonNode, com.networknt.schema.InputFormat.JSON);
+                Set<ValidationMessage> errors = SCHEMA.validate(jsonNode);
                 if (!errors.isEmpty()) {
-                    throw new ValidationException("JSON does not conform to " + schemaName + " schema: " + errors.iterator().next());
+                    throw new ValidationException("JSON does not conform to ${schemaName} schema: " + errors.iterator().next());
                 }
                 return new ${schemaName}Impl(jsonNode);
             }
@@ -110,8 +110,6 @@ function generateOneOfFactory(
         import java.util.Set;
         import java.util.List;
         import java.util.ArrayList;
-        import com.networknt.schema.CompositionValidator;
-
         public class ${schemaName}Factory {
             ${optionSchemaDecls}
             private static final CompositionValidator validator = new CompositionValidator();
@@ -120,7 +118,7 @@ function generateOneOfFactory(
               * Validates against all oneOf options and creates the matching implementation.
                */
             public static ${schemaName} fromJsonNode(JsonNode jsonNode) {
-                java.utils.List<JsonSchema> schemas = List.of(${schemaList});
+                java.util.List<JsonSchema> schemas = List.of(${schemaList});
                 CompositionValidator validator = new CompositionValidator();
                 OneOfMatchResult result = validator.validateOneOf(jsonNode, schemas);
 
@@ -168,7 +166,6 @@ function generateAnyOfFactory(
         import java.util.Set;
         import java.util.List;
         import java.util.ArrayList;
-        import com.networknt.schema.CompositionValidator;
 
         public class ${schemaName}Factory {
             ${optionSchemaDecls}
@@ -215,7 +212,7 @@ function generateAllOfFactory(
               * Validates against all allOf schemas and creates the implementation.
                */
             public static ${schemaName} fromJsonNode(JsonNode jsonNode) {
-                Set<ValidationMessage> errors = SCHEMA.validate(jsonNode, com.networknt.schema.InputFormat.JSON);
+                Set<ValidationMessage> errors = SCHEMA.validate(jsonNode);
                 if (!errors.isEmpty()) {
                     throw new ValidationException("JSON does not conform to " + schemaName + " schema: " + errors.iterator().next());
                   }

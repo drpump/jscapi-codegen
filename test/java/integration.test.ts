@@ -1,7 +1,7 @@
 import { execSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
-import { generateJavaFromSchema } from '../../src/generators/java/codeGenerator';
+import { generateJavaFromSchema, writeJavaFiles } from '../../src/generators/java/codeGenerator';
 import { generateJsonNodeConverters } from '../../src/generators/java/jsonNodeConvertersGenerator';
 
 describe('Java Integration Tests', () => {
@@ -83,9 +83,14 @@ describe('Java Integration Tests', () => {
             fs.mkdirSync(packageDir, { recursive: true });
             fs.writeFileSync(path.join(packageDir, `${schemaName}.java`), result.interfaceCode.replace('package PACKAGE_PLACEHOLDER;', 'package com.example.api;'));
             fs.writeFileSync(path.join(packageDir, `${schemaName}Impl.java`), result.implementationCode.replace('package PACKAGE_PLACEHOLDER;', 'package com.example.api;').replace('PACKAGE_PLACEHOLDER.JsonNodeConverters;', 'com.example.api.JsonNodeConverters;'));
+            fs.writeFileSync(path.join(packageDir, `${schemaName}Factory.java`), result.factoryCode);
             // Write the JsonNodeConverters utility class (required by generated code)
             const convertersCode = generateJsonNodeConverters('com.example.api');
             fs.writeFileSync(path.join(packageDir, 'JsonNodeConverters.java'), convertersCode);
+            fs.copyFileSync(
+                path.join(__dirname, 'com', 'example', 'api', 'FactorySupport.java'),
+                path.join(packageDir, 'FactorySupport.java')
+            );
             fs.copyFileSync(path.join(fixturesDir, 'person.json'), path.join(tempDir, 'person.schema.json'));
             fs.copyFileSync(path.join(fixturesDir, 'valid-person.json'), path.join(tempDir, 'valid-person.json'));
             fs.copyFileSync(path.join(fixturesDir, 'invalid-person.json'), path.join(tempDir, 'invalid-person.json'));
@@ -122,7 +127,7 @@ describe('Java Integration Tests', () => {
              );
             fs.copyFileSync(fixtureDriverPath, path.join(packageDir, 'TestDriver.java'));
             // Compile the test driver alongside generated classes
-            const compileCmd = `cd ${tempDir} && javac -cp ".:${libsDir}/*" com/example/api/Person.java com/example/api/PersonImpl.java com/example/api/TestDriver.java`;
+            const compileCmd = `cd ${tempDir} && javac -cp ".:${libsDir}/*" com/example/api/Person.java com/example/api/PersonImpl.java com/example/api/PersonFactory.java com/example/api/JsonNodeConverters.java com/example/api/FactorySupport.java com/example/api/TestDriver.java`;
             execSync(compileCmd, { stdio: 'pipe', timeout: 30000 });
 
              // Run the test driver
@@ -217,6 +222,57 @@ describe('Java Integration Tests', () => {
 
     describe('Content Types Polymorphic Schema', () => {
         const schemaName = 'ContentTypes';
+
+        it('should validate content JSON and access generated variant getters at runtime', () => {
+            if (!javaAvailable()) {
+                return;
+            }
+
+            const schema = JSON.parse(fs.readFileSync(path.join(fixturesDir, 'content-types.json'), 'utf-8'));
+            const result = generateJavaFromSchema(schema, schemaName, 'com.example.api');
+            writeJavaFiles(result, tempDir, 'com.example.api');
+
+            const packageDir = path.join(tempDir, 'com/example/api');
+            fs.writeFileSync(
+                path.join(packageDir, 'JsonNodeConverters.java'),
+                generateJsonNodeConverters('com.example.api')
+            );
+            fs.copyFileSync(
+                path.join(__dirname, 'com', 'example', 'api', 'ContentTypesTestDriver.java'),
+                path.join(packageDir, 'ContentTypesTestDriver.java')
+            );
+            fs.copyFileSync(
+                path.join(__dirname, 'com', 'example', 'api', 'FactorySupport.java'),
+                path.join(packageDir, 'FactorySupport.java')
+            );
+            fs.copyFileSync(path.join(fixturesDir, 'content-types.json'), path.join(tempDir, 'content-types.schema.json'));
+            fs.copyFileSync(path.join(fixturesDir, 'valid-content-types.json'), path.join(tempDir, 'valid-content-types.json'));
+            fs.copyFileSync(path.join(fixturesDir, 'invalid-content-types.json'), path.join(tempDir, 'invalid-content-types.json'));
+
+            const sources = [
+                'ContentTypes.java',
+                'ContentTypesFactory.java',
+                'ContentTypesImpl.java',
+                'TextContent.java',
+                'RichContent.java',
+                'ImageContent.java',
+                'VideoContent.java',
+                'RichContentFormatting.java',
+                'RichContentFormattingImpl.java',
+                'JsonNodeConverters.java',
+                'FactorySupport.java',
+                'ContentTypesTestDriver.java',
+            ].map(file => `com/example/api/${file}`).join(' ');
+            execSync(`cd ${tempDir} && javac -cp ".:${libsDir}/*" ${sources}`, { stdio: 'pipe', timeout: 30000 });
+
+            const output = execSync(
+                `cd ${tempDir} && java -cp ".:${libsDir}/*" com.example.api.ContentTypesTestDriver`,
+                { encoding: 'utf-8', timeout: 30000 }
+            );
+            expect(output).toContain('Valid image JSON creates ContentTypes');
+            expect(output).toContain('ContentTypes factory rejects invalid JSON');
+            expect(output).toContain('All Content Types Tests Passed');
+        }, 30000);
         
         it('should generate union interface from anyOf with variant check methods', () => {
             const schema = JSON.parse(fs.readFileSync(path.join(fixturesDir, 'content-types.json'), 'utf-8'));

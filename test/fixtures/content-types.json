@@ -1,5 +1,5 @@
 {
-  "$schema": "https://json-schema.org/draft-2020-12/schema",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "ContentTypes",
   "description": "Demonstrates structural anyOf with base schema inheritance: each variant extends a shared Content interface and defines its own const value via allOf, enabling separate interfaces for the discriminator in strongly-typed languages",
 

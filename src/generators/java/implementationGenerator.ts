@@ -121,54 +121,64 @@ export function generateAnyOfImplementationClass(
 ): string {
     const implementsList = [schemaName, ...optionInterfaces].join(', ');
 
-    // Collect all getters to gather imports
-    const allGetters: PropertyGetter[] = [];
-    gettersByOption.forEach(getters => allGetters.push(...getters));
-    const imports = collectImports(allGetters, packageName);
+    const gettersByName = new Map<string, PropertyGetter>();
+    gettersByOption.forEach(getters => {
+        getters.forEach(getter => {
+            if (!gettersByName.has(getter.javaName)) {
+                gettersByName.set(getter.javaName, getter);
+            }
+        });
+    });
+    const getters = Array.from(gettersByName.values());
+    const imports = collectImports(getters, packageName);
     const importBlock = imports.size > 0 
            ? Array.from(imports).sort().map(imp => 'import ' + imp).join('\n') + '\n' : '';
 
     return dedent`
-        
-          public final class ${schemaName}Impl implements ${implementsList} {
+          package ${packageName};
+
+          ${importBlock}public final class ${schemaName}Impl implements ${implementsList} {
 
               private final com.fasterxml.jackson.databind.JsonNode jsonNode;
               private final java.util.Set<String> satisfiedSchemas;
 
                ${schemaName}Impl(com.fasterxml.jackson.databind.JsonNode jsonNode, java.util.List<String> matchedIndices) {
                   this.jsonNode = java.util.Objects.requireNonNull(jsonNode, "jsonNode must not be null");
-                  this.satisfiedSchemas = new java.util.HashSet<>(schemaNamesFromIndices(matchedIndices));
+                  this.satisfiedSchemas = new java.util.HashSet<>(matchedIndices);
                  }
 
-               ${Array.from(gettersByOption.entries()).map(([optionName, getters]) => {
-                   if (getters.length === 0) return '';
-                   return dedent`
-                     
-                     // ${optionName} getters
-                      ${getters.map(getter => dedent`
-                             @Override
-                            public ${getter.typeMapping.javaType} get${capitalize(getter.javaName)}() {
-                                ${generateGetterBody(getter)}
-                              }
-                        `).join('\n\n                          ')}
-                   `;
-                 }).join('\n\n               ')}
-
-               @Override
-              public java.util.List<String> getSatisfiedSchemas() {
-                  return java.util.List.copyOf(satisfiedSchemas);
-                 }
+               ${getters.map(getter => dedent`
+                   @Override
+                  public ${getter.typeMapping.javaType} get${capitalize(getter.javaName)}() {
+                      ${generateGetterBody(getter)}
+                    }
+               `).join('\n\n               ')}
 
                ${optionInterfaces.map(optionName => dedent`
                    @Override
                   public java.util.Optional<${optionName}> as${capitalize(optionName)}() {
-                      return satisfiedSchemas.contains("${optionName}") ? java.util.Optional.<${optionName}>this((${optionName}) this) : java.util.Optional.empty();
+                      return satisfiedSchemas.contains("${optionName}") ? java.util.Optional.of((${optionName}) this) : java.util.Optional.empty();
+                     }
+
+                   @Override
+                  public boolean is${capitalize(optionName)}() {
+                      return satisfiedSchemas.contains("${optionName}");
                      }
                `).join('\n\n               ')}
+
+               public java.util.List<String> getSatisfiedSchemas() {
+                  return java.util.List.copyOf(satisfiedSchemas);
+                 }
 
                @Override
               public com.fasterxml.jackson.databind.JsonNode getRawNode() {
                   return jsonNode;
+                 }
+
+               @Override
+              public boolean hasProperty(String propertyName) {
+                  com.fasterxml.jackson.databind.JsonNode node = jsonNode.get(propertyName);
+                  return node != null && !node.isNull();
                  }
 
            }
@@ -182,11 +192,6 @@ function toConstant(name: string): string {
 function capitalize(s: string): string {
     if (!s) return s;
     return s.charAt(0).toUpperCase() + s.slice(1);
-}
-
-function schemaNamesFromIndices(indices: string[]): string[] {
-    // Placeholder - will be replaced with actual logic
-    return [];
 }
 
 function collectImports(getters: PropertyGetter[], packageName: string): Set<string> {
