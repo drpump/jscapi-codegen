@@ -6,7 +6,8 @@ import { generateJsonNodeConverters } from '../../src/generators/java/jsonNodeCo
 
 describe('Java Integration Tests', () => {
     const projectRoot = path.join(__dirname, '..', '..');
-    const fixturesDir = path.join(__dirname, '..', 'fixtures');
+    const schemasDir = path.join(__dirname, '..', 'fixtures', 'schemas');
+    const jsonDataDir = path.join(__dirname, '..', 'fixtures', 'json-data');
     const tempDir = path.join(projectRoot, '.temp-test-java');
     const libsDir = path.join(projectRoot, 'libs');
     
@@ -48,7 +49,7 @@ describe('Java Integration Tests', () => {
         
         it('should generate compilable Java interface from Person schema', () => {
             // Load and parse the schema
-            const schema = JSON.parse(fs.readFileSync(path.join(fixturesDir, 'person.json'), 'utf-8'));
+            const schema = JSON.parse(fs.readFileSync(path.join(schemasDir, 'person.json'), 'utf-8'));
             
             // Call the SINGLE top-level generation function
             const result = generateJavaFromSchema(schema, schemaName, 'com.example.api');
@@ -75,7 +76,7 @@ describe('Java Integration Tests', () => {
         
         beforeAll(() => {
             // Generate ALL code with a SINGLE top-level call
-            const schema = JSON.parse(fs.readFileSync(path.join(fixturesDir, 'person.json'), 'utf-8'));
+            const schema = JSON.parse(fs.readFileSync(path.join(schemasDir, 'person.json'), 'utf-8'));
             const result = generateJavaFromSchema(schema, schemaName, 'com.example.api');
             
             packageDir = path.join(tempDir, 'com/example/api');
@@ -88,8 +89,10 @@ describe('Java Integration Tests', () => {
             // Write the JsonNodeConverters utility class (required by generated code)
             const convertersCode = generateJsonNodeConverters('com.example.api');
             fs.writeFileSync(path.join(packageDir, 'JsonNodeConverters.java'), convertersCode);
-            fs.copyFileSync(path.join(fixturesDir, 'valid-person.json'), path.join(tempDir, 'valid-person.json'));
-            fs.copyFileSync(path.join(fixturesDir, 'invalid-person.json'), path.join(tempDir, 'invalid-person.json'));
+            const jsonDataTempDir = path.join(tempDir, 'json-data');
+            fs.mkdirSync(jsonDataTempDir, { recursive: true });
+            fs.copyFileSync(path.join(jsonDataDir, 'valid-person.json'), path.join(jsonDataTempDir, 'valid-person.json'));
+            fs.copyFileSync(path.join(jsonDataDir, 'invalid-person.json'), path.join(jsonDataTempDir, 'invalid-person.json'));
         }, 30000);
         
         it('should compile generated interface and implementation', () => {
@@ -142,7 +145,7 @@ describe('Java Integration Tests', () => {
             }
             
             // Read and validate the schema file itself
-            const schema = JSON.parse(fs.readFileSync(path.join(fixturesDir, 'person.json'), 'utf-8'));
+            const schema = JSON.parse(fs.readFileSync(path.join(schemasDir, 'person.json'), 'utf-8'));
             expect(schema.$schema).toBe('https://json-schema.org/draft/2020-12/schema');
             expect(schema.type).toBe('object');
             expect(schema.required).toContain('firstName');
@@ -155,7 +158,7 @@ describe('Java Integration Tests', () => {
             }
             
             // Load schema and use the top-level generator to verify getters
-            const schema = JSON.parse(fs.readFileSync(path.join(fixturesDir, 'person.json'), 'utf-8'));
+            const schema = JSON.parse(fs.readFileSync(path.join(schemasDir, 'person.json'), 'utf-8'));
             const result = generateJavaFromSchema(schema, 'Person', 'com.example.api');
             
             // Verify the interface code contains all expected property accessors
@@ -176,7 +179,7 @@ describe('Java Integration Tests', () => {
         }, 30000);
         
         it('should generate interface with $ref property getters', () => {
-            const schema = JSON.parse(fs.readFileSync(path.join(fixturesDir, 'all-of-shared.json'), 'utf-8'));
+            const schema = JSON.parse(fs.readFileSync(path.join(schemasDir, 'all-of-shared.json'), 'utf-8'));
             expect(schema.title).toBe('AllOfShared');
             expect(schema.type).toBe('object');
             
@@ -192,7 +195,7 @@ describe('Java Integration Tests', () => {
         });
         
         it('should produce getters for $ref properties in simple object', () => {
-            const schema = JSON.parse(fs.readFileSync(path.join(fixturesDir, 'all-of-shared.json'), 'utf-8'));
+            const schema = JSON.parse(fs.readFileSync(path.join(schemasDir, 'all-of-shared.json'), 'utf-8'));
             expect(schema.definitions).toBeDefined();
             expect(schema.definitions!.BaseObject).toBeDefined();
             expect(schema.definitions!.DetailedObject).toBeDefined();
@@ -205,7 +208,7 @@ describe('Java Integration Tests', () => {
         });
         
         it('should handle nested allOf within $defs (DetailedObject)', () => {
-            const schema = JSON.parse(fs.readFileSync(path.join(fixturesDir, 'all-of-shared.json'), 'utf-8'));
+            const schema = JSON.parse(fs.readFileSync(path.join(schemasDir, 'all-of-shared.json'), 'utf-8'));
             const detailedDef = schema.definitions!.DetailedObject as any;
             expect(detailedDef.allOf).toBeDefined();
             expect(Array.isArray(detailedDef.allOf)).toBe(true);
@@ -224,7 +227,7 @@ describe('Java Integration Tests', () => {
                 return;
             }
 
-            const schema = JSON.parse(fs.readFileSync(path.join(fixturesDir, 'content-types.json'), 'utf-8'));
+            const schema = JSON.parse(fs.readFileSync(path.join(schemasDir, 'content-types.json'), 'utf-8'));
             const result = generateJavaFromSchema(schema, schemaName, 'com.example.api');
             writeJavaFiles(result, tempDir, 'com.example.api');
 
@@ -237,8 +240,10 @@ describe('Java Integration Tests', () => {
                 path.join(__dirname, 'com', 'example', 'api', 'ContentTypesTestDriver.java'),
                 path.join(packageDir, 'ContentTypesTestDriver.java')
             );
-            fs.copyFileSync(path.join(fixturesDir, 'valid-content-types.json'), path.join(tempDir, 'valid-content-types.json'));
-            fs.copyFileSync(path.join(fixturesDir, 'invalid-content-types.json'), path.join(tempDir, 'invalid-content-types.json'));
+            const jsonDataTempDir = path.join(tempDir, 'json-data');
+            fs.mkdirSync(jsonDataTempDir, { recursive: true });
+            fs.copyFileSync(path.join(jsonDataDir, 'valid-content-types.json'), path.join(jsonDataTempDir, 'valid-content-types.json'));
+            fs.copyFileSync(path.join(jsonDataDir, 'invalid-content-types.json'), path.join(jsonDataTempDir, 'invalid-content-types.json'));
 
             const sources = [
                 'ContentTypes.java',
@@ -270,7 +275,7 @@ describe('Java Integration Tests', () => {
         }, 30000);
         
         it('should generate union interface from anyOf with variant check methods', () => {
-            const schema = JSON.parse(fs.readFileSync(path.join(fixturesDir, 'content-types.json'), 'utf-8'));
+            const schema = JSON.parse(fs.readFileSync(path.join(schemasDir, 'content-types.json'), 'utf-8'));
             expect(schema.title).toBe('ContentTypes');
             expect(schema.anyOf).toBeDefined();
             expect(Array.isArray(schema.anyOf)).toBe(true);
@@ -290,7 +295,7 @@ describe('Java Integration Tests', () => {
         });
         
         it('should generate factory with variant creators for anyOf schema', () => {
-            const schema = JSON.parse(fs.readFileSync(path.join(fixturesDir, 'content-types.json'), 'utf-8'));
+            const schema = JSON.parse(fs.readFileSync(path.join(schemasDir, 'content-types.json'), 'utf-8'));
             const result = generateJavaFromSchema(schema, schemaName, 'com.example.api');
             
             expect(result.factoryCode).toContain('ContentTypesFactory');
@@ -310,7 +315,7 @@ describe('Java Integration Tests', () => {
 
     describe('Polymorphism Composition Test', () => {
         it('should correctly identify allOf composition pattern', () => {
-            const allOfSchema = JSON.parse(fs.readFileSync(path.join(fixturesDir, 'all-of-shared.json'), 'utf-8'));
+            const allOfSchema = JSON.parse(fs.readFileSync(path.join(schemasDir, 'all-of-shared.json'), 'utf-8'));
             // This schema is a simple object (not allOf at top level)
             const allOfResult = generateJavaFromSchema(allOfSchema, 'AllOfShared', 'com.example.api');
             // Simple objects don't have extends or boolean is patterns
@@ -318,13 +323,13 @@ describe('Java Integration Tests', () => {
         });
         
         it('should correctly identify anyOf composition pattern', () => {
-            const anyOfSchema = JSON.parse(fs.readFileSync(path.join(fixturesDir, 'content-types.json'), 'utf-8'));
+            const anyOfSchema = JSON.parse(fs.readFileSync(path.join(schemasDir, 'content-types.json'), 'utf-8'));
             const anyOfResult = generateJavaFromSchema(anyOfSchema, 'ContentTypes', 'com.example.api');
             expect(anyOfResult.interfaceCode).toContain('boolean is');
         });
         
         it('should distinguish simple object from polymorphic schemas', () => {
-            const simpleSchema = JSON.parse(fs.readFileSync(path.join(fixturesDir, 'person.json'), 'utf-8'));
+            const simpleSchema = JSON.parse(fs.readFileSync(path.join(schemasDir, 'person.json'), 'utf-8'));
             const simpleResult = generateJavaFromSchema(simpleSchema, 'Person', 'com.example.api');
             expect(simpleResult.interfaceCode).not.toContain('extends');
             expect(simpleResult.interfaceCode).not.toContain('boolean is');
@@ -332,7 +337,7 @@ describe('Java Integration Tests', () => {
             expect(simpleResult.interfaceCode).toContain('getLastName()');
             
             // anyOf schema should have variant check methods
-            const anyOfSchema = JSON.parse(fs.readFileSync(path.join(fixturesDir, 'content-types.json'), 'utf-8'));
+            const anyOfSchema = JSON.parse(fs.readFileSync(path.join(schemasDir, 'content-types.json'), 'utf-8'));
             const anyOfResult = generateJavaFromSchema(anyOfSchema, 'ContentTypes', 'com.example.api');
             expect(anyOfResult.interfaceCode).toContain('boolean isTextContent()');
         });

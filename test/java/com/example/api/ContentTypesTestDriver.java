@@ -8,7 +8,7 @@ import java.nio.file.Path;
 public class ContentTypesTestDriver {
     public static void main(String[] args) throws Exception {
         ObjectMapper mapper = new ObjectMapper();
-        JsonNode validJson = mapper.readTree(Path.of("valid-content-types.json").toFile());
+        JsonNode validJson = mapper.readTree(Path.of("json-data", "valid-content-types.json").toFile());
 
         ContentTypes content = ContentTypesFactory.fromJsonNode(validJson);
         check(content.isImageContent(), "image variant is selected");
@@ -22,7 +22,7 @@ public class ContentTypesTestDriver {
         check(image.getHeight() == 480L, "height getter");
         System.out.println("Test 1 PASSED: Valid image JSON creates ContentTypes and exposes image getters");
 
-        JsonNode invalidJson = mapper.readTree(Path.of("invalid-content-types.json").toFile());
+        JsonNode invalidJson = mapper.readTree(Path.of("json-data", "invalid-content-types.json").toFile());
         boolean validationFailed = false;
         try {
             ContentTypesFactory.fromJsonNode(invalidJson);

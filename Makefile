@@ -77,7 +77,7 @@ test-java: setup test-person test-driver test-content-types
 test-person: deps
 	@echo "=== Testing Person Schema Compilation ===" && \
 	mkdir -p $(TEMP_DIR)/com/example/api && \
-	npx ts-node src/main.ts generate --schema test/fixtures/person.json --output $(TEMP_DIR) && \
+	npx ts-node src/main.ts generate --schema test/fixtures/schemas/person.json --output $(TEMP_DIR) && \
 	sed 's/package PACKAGE_PLACEHOLDER;/package com.example.api;/' $(TEMP_DIR)/com/example/api/Person.java > $(TEMP_DIR)/com/example/api/Person.java.tmp && \
 	mv $(TEMP_DIR)/com/example/api/Person.java.tmp $(TEMP_DIR)/com/example/api/Person.java && \
 	node --require ts-node/register -e 'const fs = require("fs"); const { generateJsonNodeConverters } = require("./src/generators/java/jsonNodeConvertersGenerator"); fs.writeFileSync("$(TEMP_DIR)/com/example/api/JsonNodeConverters.java", generateJsonNodeConverters("com.example.api"));' && \
@@ -88,19 +88,21 @@ test-driver: test-person
 	@echo "=== Testing Driver Compilation ===" && \
 	mkdir -p $(TEMP_DIR)/com/example/api && \
 	cp test/java/com/example/api/PersonTestDriver.java $(TEMP_DIR)/com/example/api/ && \
-	cp test/fixtures/valid-person.json $(TEMP_DIR)/valid-person.json && \
-	cp test/fixtures/invalid-person.json $(TEMP_DIR)/invalid-person.json && \
+	mkdir -p $(TEMP_DIR)/json-data && \
+	cp test/fixtures/json-data/valid-person.json $(TEMP_DIR)/json-data/valid-person.json && \
+	cp test/fixtures/json-data/invalid-person.json $(TEMP_DIR)/json-data/invalid-person.json && \
 	javac -cp "$(JARS):$(TEMP_DIR)" $(TEMP_DIR)/com/example/api/PersonTestDriver.java && \
 	cd $(TEMP_DIR) && java -cp ".:$(abspath $(LIBS_DIR))/*" com.example.api.PersonTestDriver
 
 test-content-types: deps
 	@echo "=== Testing Content Types Schema Compilation and Runtime ===" && \
 	mkdir -p $(TEMP_DIR)/com/example/api && \
-	npx ts-node src/main.ts generate --schema test/fixtures/content-types.json --output $(TEMP_DIR) && \
+	npx ts-node src/main.ts generate --schema test/fixtures/schemas/content-types.json --output $(TEMP_DIR) && \
 	node --require ts-node/register -e 'const fs = require("fs"); const { generateJsonNodeConverters } = require("./src/generators/java/jsonNodeConvertersGenerator"); fs.writeFileSync("$(TEMP_DIR)/com/example/api/JsonNodeConverters.java", generateJsonNodeConverters("com.example.api"));' && \
 	cp test/java/com/example/api/ContentTypesTestDriver.java $(TEMP_DIR)/com/example/api/ && \
-	cp test/fixtures/valid-content-types.json $(TEMP_DIR)/valid-content-types.json && \
-	cp test/fixtures/invalid-content-types.json $(TEMP_DIR)/invalid-content-types.json && \
+	mkdir -p $(TEMP_DIR)/json-data && \
+	cp test/fixtures/json-data/valid-content-types.json $(TEMP_DIR)/json-data/valid-content-types.json && \
+	cp test/fixtures/json-data/invalid-content-types.json $(TEMP_DIR)/json-data/invalid-content-types.json && \
 	javac -cp "$(JARS):$(TEMP_DIR)" \
 		$(TEMP_DIR)/com/example/api/ContentTypes.java \
 		$(TEMP_DIR)/com/example/api/ContentTypesFactory.java \

@@ -13,7 +13,7 @@ public class PersonTestDriver {
         System.out.println("=== Person Java Integration Test ===");
 
         ObjectMapper mapper = new ObjectMapper();
-        JsonNode validJson = mapper.readTree(Path.of("valid-person.json").toFile());
+        JsonNode validJson = mapper.readTree(Path.of("json-data", "valid-person.json").toFile());
         Person person = PersonFactory.fromJsonNode(validJson);
         check("John".equals(person.getFirstName()), "firstName getter");
         check("Doe".equals(person.getLastName()), "lastName getter");
@@ -22,7 +22,7 @@ public class PersonTestDriver {
         check(Boolean.TRUE.equals(person.getIsActive()), "isActive getter");
         System.out.println("Test 1 PASSED: Valid JSON creates a Person and getters return parsed attributes");
 
-        JsonNode invalidJson = mapper.readTree(Path.of("invalid-person.json").toFile());
+        JsonNode invalidJson = mapper.readTree(Path.of("json-data", "invalid-person.json").toFile());
         boolean validationFailed = false;
         try {
             PersonFactory.fromJsonNode(invalidJson);
