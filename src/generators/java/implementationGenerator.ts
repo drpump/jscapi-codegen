@@ -9,12 +9,13 @@ import { PropertyGetter } from './interfaceGenerator';
  */
 export function generateImplementationClass(
     schemaName: string,
+    packageName: string,
     getters: PropertyGetter[]
 ): string {
     const propertyNames = new Set(getters.map(g => g.propertyName));
 
     // Collect imports from getters
-    const imports = collectImports(getters);
+    const imports = collectImports(getters, packageName);
     const importBlock = imports.size > 0 
            ? Array.from(imports).sort().map(imp => 'import ' + imp).join('\n') + '\n' : '';
 
@@ -24,7 +25,7 @@ export function generateImplementationClass(
           * Default implementation of ${schemaName} backed by JsonNode.
            * Thread-safe and immutable after construction.
            */
-        package PACKAGE_PLACEHOLDER;
+        package ${packageName};
 
         ${importBlock}public class ${schemaName}Impl implements ${schemaName} {
 
@@ -69,9 +70,10 @@ function generateGetterBody(getter: PropertyGetter): string {
 export function generateOneOfImplementationClass(
     optionName: string,
     baseInterface: string,
+    packageName: string,
     getters: PropertyGetter[]
 ): string {
-    const imports = collectImports(getters);
+    const imports = collectImports(getters, packageName);
     const importBlock = imports.size > 0 
            ? Array.from(imports).sort().map(imp => 'import ' + imp).join('\n') + '\n' : '';
 
@@ -81,7 +83,7 @@ export function generateOneOfImplementationClass(
            * Implementation of ${optionName} backed by JsonNode.
             * Implements both ${baseInterface} and ${optionName}.
             */
-          package PACKAGE_PLACEHOLDER;
+          package ${packageName};
 
           ${importBlock}public final class ${optionName}Impl implements ${optionName}, ${baseInterface} {
 
@@ -113,6 +115,7 @@ export function generateOneOfImplementationClass(
  */
 export function generateAnyOfImplementationClass(
     schemaName: string,
+    packageName: string,
     optionInterfaces: string[],
     gettersByOption: Map<string, PropertyGetter[]>
 ): string {
@@ -121,7 +124,7 @@ export function generateAnyOfImplementationClass(
     // Collect all getters to gather imports
     const allGetters: PropertyGetter[] = [];
     gettersByOption.forEach(getters => allGetters.push(...getters));
-    const imports = collectImports(allGetters);
+    const imports = collectImports(allGetters, packageName);
     const importBlock = imports.size > 0 
            ? Array.from(imports).sort().map(imp => 'import ' + imp).join('\n') + '\n' : '';
 
@@ -186,7 +189,7 @@ function schemaNamesFromIndices(indices: string[]): string[] {
     return [];
 }
 
-function collectImports(getters: PropertyGetter[]): Set<string> {
+function collectImports(getters: PropertyGetter[], packageName: string): Set<string> {
     const imports = new Set<string>();
     for (const getter of getters) {
         for (const imp of getter.typeMapping.imports) {
@@ -198,6 +201,6 @@ function collectImports(getters: PropertyGetter[]): Set<string> {
     // Always add JsonNode import for implementation classes
     imports.add('com.fasterxml.jackson.databind.JsonNode;');
     // Add JsonNodeConverters import (assumed to be in the same package)
-    imports.add('PACKAGE_PLACEHOLDER.JsonNodeConverters;');
+    imports.add(`${packageName}.JsonNodeConverters;`);
     return imports;
 }

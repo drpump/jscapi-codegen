@@ -31,43 +31,45 @@ describe('implementationGenerator', () => {
          }
      ];
 
+    const packageName = 'com.example.api';
+
     describe('generateImplementationClass', () => {
         it('should generate implementation class with correct name', () => {
-            const code = generateImplementationClass('Person', sampleGetters);
+            const code = generateImplementationClass('Person', packageName, sampleGetters);
 
             expect(code).toContain('class PersonImpl implements Person');
           });
 
         it('should include JsonNode backing field', () => {
-            const code = generateImplementationClass('Person', sampleGetters);
+            const code = generateImplementationClass('Person', packageName, sampleGetters);
             expect(code).toContain('private final com.fasterxml.jackson.databind.JsonNode jsonNode;');
           });
 
         it('should include constructor with requireNonNull validation', () => {
-            const code = generateImplementationClass('Person', sampleGetters);
+            const code = generateImplementationClass('Person', packageName, sampleGetters);
             expect(code).toContain('requireNonNull(jsonNode, "jsonNode must not be null")');
           });
 
         it('should implement getRawNode method', () => {
-            const code = generateImplementationClass('Person', sampleGetters);
+            const code = generateImplementationClass('Person', packageName, sampleGetters);
             expect(code).toContain('JsonNode getRawNode()');
             expect(code).toContain('return jsonNode;');
           });
 
         it('should implement hasProperty method', () => {
-            const code = generateImplementationClass('Person', sampleGetters);
+            const code = generateImplementationClass('Person', packageName, sampleGetters);
             expect(code).toContain('boolean hasProperty(String propertyName)');
             expect(code).toContain('jsonNode.get(propertyName)');
           });
 
         it('should include property name constants', () => {
-            const code = generateImplementationClass('Person', sampleGetters);
+            const code = generateImplementationClass('Person', packageName, sampleGetters);
             expect(code).toContain('PROP_NAME');
             expect(code).toContain('PROP_AGE');
           });
 
         it('should delegate getters to typeMapper expressions', () => {
-            const code = generateImplementationClass('Person', sampleGetters);
+            const code = generateImplementationClass('Person', packageName, sampleGetters);
              // Check that the getter bodies use the expressions from typeMapper
             expect(code).not.toContain('line 182 of');
           });
@@ -75,35 +77,36 @@ describe('implementationGenerator', () => {
 
     describe('generateOneOfImplementationClass', () => {
         it('should generate standalone class implementing both interfaces', () => {
-            const code = generateOneOfImplementationClass('Cat', 'Pet', sampleGetters);
+            const code = generateOneOfImplementationClass('Cat', 'Pet', packageName, sampleGetters);
 
             expect(code).toContain('public final class CatImpl');
             expect(code).toContain('implements Cat, Pet');
+            expect(code).toContain(`package ${packageName};`);
           });
 
         it('should include JsonNode backing field', () => {
-            const code = generateOneOfImplementationClass('Dog', 'Animal', sampleGetters);
+            const code = generateOneOfImplementationClass('Dog', 'Animal', packageName, sampleGetters);
             expect(code).toContain('private final com.fasterxml.jackson.databind.JsonNode jsonNode;');
           });
 
         it('should include package-private constructor', () => {
-            const code = generateOneOfImplementationClass('Cat', 'Pet', sampleGetters);
+            const code = generateOneOfImplementationClass('Cat', 'Pet', packageName, sampleGetters);
             expect(code).toContain('CatImpl(com.fasterxml.jackson.databind.JsonNode jsonNode)');
           });
 
         it('should include getRawNode method', () => {
-            const code = generateOneOfImplementationClass('Cat', 'Pet', sampleGetters);
+            const code = generateOneOfImplementationClass('Cat', 'Pet', packageName, sampleGetters);
             expect(code).toContain('JsonNode getRawNode()');
           });
 
         it('should exclude hasProperty for oneOf variants', () => {
-            const code = generateOneOfImplementationClass('Cat', 'Pet', sampleGetters);
+            const code = generateOneOfImplementationClass('Cat', 'Pet', packageName, sampleGetters);
              // OneOf implementation doesn't have hasProperty, only the base interface does
             expect(code).not.toContain('boolean hasProperty');
           });
 
         it('should handle empty getters array', () => {
-            const code = generateOneOfImplementationClass('Empty', 'Base', []);
+            const code = generateOneOfImplementationClass('Empty', 'Base', packageName, []);
             expect(code).toContain('public final class EmptyImpl');
             expect(code).toContain('implements Empty, Base');
           });
@@ -117,6 +120,7 @@ describe('implementationGenerator', () => {
 
             const code = generateAnyOfImplementationClass(
                 'Document',
+                packageName,
                 ['Text', 'Rich'],
                 gettersByOption
              );
@@ -130,6 +134,7 @@ describe('implementationGenerator', () => {
             
             const code = generateAnyOfImplementationClass(
                 'Content',
+                packageName,
                 ['A', 'B'],
                 gettersByOption
              );
@@ -142,6 +147,7 @@ describe('implementationGenerator', () => {
             
             const code = generateAnyOfImplementationClass(
                 'Content',
+                packageName,
                 ['X', 'Y'],
                 gettersByOption
              );
@@ -154,6 +160,7 @@ describe('implementationGenerator', () => {
             
             const code = generateAnyOfImplementationClass(
                 'Content',
+                packageName,
                 ['X', 'Y'],
                 gettersByOption
              );
@@ -166,6 +173,7 @@ describe('implementationGenerator', () => {
             
             const code = generateAnyOfImplementationClass(
                 'Content',
+                packageName,
                 ['Text', 'Rich'],
                 gettersByOption
              );
@@ -179,6 +187,7 @@ describe('implementationGenerator', () => {
             
             const code = generateAnyOfImplementationClass(
                 'Content',
+                packageName,
                 ['A', 'B'],
                 gettersByOption
              );
@@ -193,6 +202,7 @@ describe('implementationGenerator', () => {
 
             const code = generateAnyOfImplementationClass(
                 'Multi',
+                packageName,
                 ['EmptyOption', 'RealOption'],
                 gettersByOption
              );

@@ -1,4 +1,5 @@
 import * as fs from 'fs';
+import dedent from 'dedent';
 import { JsonSchema2020 } from '../../schema/jsonSchemaTypes';
 import { mapJsonSchemaToJavaType, TypeMappingContext } from './typeMapper';
 import { generatePropertyGetters, PropertyGetter, generateInterfaceJava } from './interfaceGenerator';
@@ -91,15 +92,18 @@ function buildPropertyGetters(schema: JsonSchema2020, schemaName: string): Prope
  */
 function generateObjectCode(
   schema: JsonSchema2020,
-  schemaName: string
+  schemaName: string,
+  packageName: string
 ): CodeGenerationResult {
   const propertyGetters = buildPropertyGetters(schema, schemaName);
 
   return {
     schemaName,
-    interfaceCode: generateInterfaceJava(schemaName, propertyGetters, undefined, false, undefined),
-    implementationCode: generateImplementationClass(schemaName, propertyGetters),
-    factoryCode: generateFactoryClass(schemaName, false, undefined),
+    interfaceCode: generateInterfaceJava(schemaName, propertyGetters, undefined,
+ false, undefined),
+    implementationCode: generateImplementationClass(schemaName, packageName, propertyGetters)
+,
+    factoryCode: generateFactoryClass(schemaName, false, packageName),
   };
 }
 
@@ -110,7 +114,8 @@ function generateObjectCode(
 function generateAllOfCode(
   schema: JsonSchema2020,
   schemaName: string,
-  composition: CompositionInfo
+  composition: CompositionInfo,
+  packageName: string
 ): CodeGenerationResult {
   // Find the first $ref option to use as extends interface
   let extendsInterface: string | undefined;
@@ -129,9 +134,28 @@ function generateAllOfCode(
   return {
     schemaName,
     interfaceCode: generateInterfaceJava(schemaName, propertyGetters, extendsInterface, false, undefined),
-    implementationCode: generateImplementationClass(schemaName, propertyGetters),
-    factoryCode: generateFactoryClass(schemaName, true, composition),
+    implementationCode: generateImplementationClass(schemaName, packageName, propertyGetters)
+,
+    factoryCode: generateFactoryClass(schemaName, true, packageName, composition),
   };
+}
+
+/**
+ * Generate a union interface for a composition type.
+ */
+function generateUnionInterface(
+  schemaName: string,
+  optionNames: string[]
+): string {
+  return dedent`
+    /**
+     * Union interface for ${schemaName} variants.
+     */
+    public interface ${schemaName} {
+      ${optionNames.map(name => `public java.util.Optional<${name}> as${name}();`).join('\n      ')}
+      ${optionNames.map(name => `public boolean is${capitalize(name)}();`).join('\n      ')}
+    }
+  `;
 }
 
 /**
@@ -141,69 +165,50 @@ function generateAllOfCode(
 function generateUnionCode(
   schema: JsonSchema2020,
   schemaName: string,
-  composition: CompositionInfo
+  composition: CompositionInfo,
+  packageName: string
 ): CodeGenerationResult {
   // Generate variant interfaces for each option
   const variantInterfaces = new Map<string, string>();
+  const optionNames: string[] = [];
+  const gettersByOption = new Map<string, PropertyGetter[]>();
 
   for (const option of composition.options) {
     const optionName = option.name;
-      // Resolve $ref against root schema $defs before flattening
+    optionNames.push(optionName);
+    // Resolve $ref against root schema $defs before flattening
     const resolvedSchema = option.schema.$ref ? resolveRef(schema, option.schema.$ref) : option.schema;
     const flattenedOption = flattenAllOfProperties(resolvedSchema);
     const optionGetters = buildPropertyGetters(flattenedOption, optionName);
+    gettersByOption.set(optionName, optionGetters);
 
     variantInterfaces.set(
       optionName,
-      generateInterfaceJava(optionName, optionGetters, undefined, false, undefined)
-       );
-     }
+      generateOneOfImplementationClass(
+        optionName,
+        schemaName,
+        packageName,
+        optionGetters
+      )
+    );
+  }
 
-    // Generate variant check methods for the union interface
-    const variantCheckMethods = composition.options
-        .map(opt => `  boolean is${opt.name}();`)
-        .join('\n');
-
-    const interfaceCode = generateInterfaceJava(schemaName, [], undefined, false, undefined)
-       .replace(
-         'boolean hasProperty(String propertyName);',
-        variantCheckMethods + '\n  boolean hasProperty(String propertyName);'
-       );
-  let implementationCode: string;
-  if (composition.type === 'anyOf') {
-    const optionInterfaces = composition.options.map(opt => opt.name);
-    const gettersByOption = new Map<string, PropertyGetter[]>();
-    for (const opt of composition.options) {
-      // Resolve $ref against root schema $defs before flattening
-      const resolvedOpt = opt.schema.$ref ? resolveRef(schema, opt.schema.$ref) : opt.schema;
-      const flattenedOpt = flattenAllOfProperties(resolvedOpt);
-      gettersByOption.set(opt.name, buildPropertyGetters(flattenedOpt, opt.name));
-      }
-    implementationCode = generateAnyOfImplementationClass(
+  return {
+    schemaName,
+    interfaceCode: generateUnionInterface(schemaName, optionNames),
+    implementationCode: generateAnyOfImplementationClass(
       schemaName,
-      optionInterfaces,
+      packageName,
+      optionNames,
       gettersByOption
-      );
-     } else {
-       // oneOf
-      implementationCode = generateOneOfImplementationClass(
-        schemaName,
-        schemaName,
-        []
-       );
-     }
+    ),
+    variantInterfaces,
+    factoryCode: generateFactoryClass(schemaName, false, packageName),
+  };
+}
 
-      return {
-        schemaName,
-        interfaceCode,
-        implementationCode,
-        factoryCode: generateFactoryClass(schemaName, true, composition),
-        variantInterfaces,
-      };
-    }
-
-    /**
-     * Generate all Java code (interface, implementation, factory) from a JSON Schema.
+/**
+ * Generate all Java code (interface, implementation, factory) from a JSON Schema.
  * Uses the full type-mapping pipeline with proper Java types and JsonNode-backed getters.
  * 
  * This is the single entry point for code generation — whether from the CLI,
@@ -223,17 +228,17 @@ export function generateJavaFromSchema(
   if (composition) {
     switch (composition.type) {
       case 'allOf':
-        return generateAllOfCode(schema, schemaName, composition);
+        return generateAllOfCode(schema, schemaName, composition, packageName);
       case 'oneOf':
       case 'anyOf':
-        return generateUnionCode(schema, schemaName, composition);
+        return generateUnionCode(schema, schemaName, composition, packageName);
       default:
         break;
     }
   }
 
   // Simple object — no composition keywords
-  return generateObjectCode(schema, schemaName);
+  return generateObjectCode(schema, schemaName, packageName);
 }
 
 /**
