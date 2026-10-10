@@ -2,6 +2,7 @@ import { execSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import { generateJavaFromSchema } from '../../src/generators/java/codeGenerator';
+import { generateJsonNodeConverters } from '../../src/generators/java/jsonNodeConvertersGenerator';
 
 describe('Java Integration Tests', () => {
     const projectRoot = path.join(__dirname, '..', '..');
@@ -81,7 +82,10 @@ describe('Java Integration Tests', () => {
             packageDir = path.join(tempDir, 'com/example/api');
             fs.mkdirSync(packageDir, { recursive: true });
             fs.writeFileSync(path.join(packageDir, `${schemaName}.java`), result.interfaceCode.replace('package PACKAGE_PLACEHOLDER;', 'package com.example.api;'));
-            fs.writeFileSync(path.join(packageDir, `${schemaName}Impl.java`), result.implementationCode);
+            fs.writeFileSync(path.join(packageDir, `${schemaName}Impl.java`), result.implementationCode.replace('package PACKAGE_PLACEHOLDER;', 'package com.example.api;').replace('PACKAGE_PLACEHOLDER.JsonNodeConverters;', 'com.example.api.JsonNodeConverters;'));
+            // Write the JsonNodeConverters utility class (required by generated code)
+            const convertersCode = generateJsonNodeConverters('com.example.api');
+            fs.writeFileSync(path.join(packageDir, 'JsonNodeConverters.java'), convertersCode);
         }, 30000);
         
         it('should compile generated interface and implementation', () => {
@@ -114,10 +118,10 @@ describe('Java Integration Tests', () => {
                 'com', 'example', 'api', 'TestDriver.java'
              );
             fs.copyFileSync(fixtureDriverPath, path.join(packageDir, 'TestDriver.java'));
-
             // Compile the test driver alongside generated classes
             const compileCmd = `cd ${tempDir} && javac -cp ".:${libsDir}/*" com/example/api/Person.java com/example/api/PersonImpl.java com/example/api/TestDriver.java`;
             execSync(compileCmd, { stdio: 'pipe', timeout: 30000 });
+
              // Run the test driver
             const runCmd = `cd ${tempDir} && java -cp ".:${libsDir}/*" com.example.api.TestDriver`;
             const output = execSync(runCmd, { encoding: 'utf-8', timeout: 30000 });

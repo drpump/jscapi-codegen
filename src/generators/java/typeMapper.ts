@@ -79,7 +79,7 @@ export function mapJsonSchemaToJavaType(
                 getterExpression: (prop) => `
                     JsonNode node = jsonNode.get("${prop}");
                     if (node == null || node.isNull()) return ${!context.isRequired ? 'null' : 'BigDecimal.ZERO'};
-                    return new BigDecimal(node.decimalValue());
+                    return node.decimalValue();
                 `.trim(),
                 nullable: !context.isRequired
              };
@@ -175,7 +175,7 @@ function generateItemConversion(itemType: TypeMapping): string {
 
 function getConversionCall(itemType: TypeMapping): string {
     if (itemType.javaType === 'BigDecimal') {
-        return 'new BigDecimal(item.decimalValue())';
+        return 'item.decimalValue()';
      }
 
     // Check for format converter

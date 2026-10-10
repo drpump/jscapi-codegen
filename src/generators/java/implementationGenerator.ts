@@ -13,13 +13,20 @@ export function generateImplementationClass(
 ): string {
     const propertyNames = new Set(getters.map(g => g.propertyName));
 
+    // Collect imports from getters
+    const imports = collectImports(getters);
+    const importBlock = imports.size > 0 
+           ? Array.from(imports).sort().map(imp => 'import ' + imp).join('\n') + '\n' : '';
+
     return dedent`
     
          /**
           * Default implementation of ${schemaName} backed by JsonNode.
            * Thread-safe and immutable after construction.
            */
-        public class ${schemaName}Impl implements ${schemaName} {
+        package PACKAGE_PLACEHOLDER;
+
+        ${importBlock}public class ${schemaName}Impl implements ${schemaName} {
 
              ${Array.from(propertyNames).sort().map(name => `private static final String PROP_${toConstant(name)} = "${name}";`).join('\n             ')}
 
@@ -43,7 +50,7 @@ export function generateImplementationClass(
 
              @Override
             public boolean hasProperty(String propertyName) {
-                JsonNode node = jsonNode.get(propertyName);
+                com.fasterxml.jackson.databind.JsonNode node = jsonNode.get(propertyName);
                 return node != null && !node.isNull();
                }
            }
@@ -64,13 +71,19 @@ export function generateOneOfImplementationClass(
     baseInterface: string,
     getters: PropertyGetter[]
 ): string {
+    const imports = collectImports(getters);
+    const importBlock = imports.size > 0 
+           ? Array.from(imports).sort().map(imp => 'import ' + imp).join('\n') + '\n' : '';
+
     return dedent`
-        
+    
           /**
            * Implementation of ${optionName} backed by JsonNode.
             * Implements both ${baseInterface} and ${optionName}.
             */
-          public final class ${optionName}Impl implements ${optionName}, ${baseInterface} {
+          package PACKAGE_PLACEHOLDER;
+
+          ${importBlock}public final class ${optionName}Impl implements ${optionName}, ${baseInterface} {
 
               private final com.fasterxml.jackson.databind.JsonNode jsonNode;
 
@@ -104,6 +117,13 @@ export function generateAnyOfImplementationClass(
     gettersByOption: Map<string, PropertyGetter[]>
 ): string {
     const implementsList = [schemaName, ...optionInterfaces].join(', ');
+
+    // Collect all getters to gather imports
+    const allGetters: PropertyGetter[] = [];
+    gettersByOption.forEach(getters => allGetters.push(...getters));
+    const imports = collectImports(allGetters);
+    const importBlock = imports.size > 0 
+           ? Array.from(imports).sort().map(imp => 'import ' + imp).join('\n') + '\n' : '';
 
     return dedent`
         
@@ -164,4 +184,20 @@ function capitalize(s: string): string {
 function schemaNamesFromIndices(indices: string[]): string[] {
     // Placeholder - will be replaced with actual logic
     return [];
+}
+
+function collectImports(getters: PropertyGetter[]): Set<string> {
+    const imports = new Set<string>();
+    for (const getter of getters) {
+        for (const imp of getter.typeMapping.imports) {
+            if (imp) {
+                imports.add(imp + ';');
+            }
+        }
+    }
+    // Always add JsonNode import for implementation classes
+    imports.add('com.fasterxml.jackson.databind.JsonNode;');
+    // Add JsonNodeConverters import (assumed to be in the same package)
+    imports.add('PACKAGE_PLACEHOLDER.JsonNodeConverters;');
+    return imports;
 }
