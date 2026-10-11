@@ -32,6 +32,8 @@ function generateSimpleFactory(schemaName: string, packageName: string): string 
         import java.util.Set;
         import java.util.List;
         import java.util.ArrayList;
+        import java.io.InputStream;
+        import java.io.IOException;
 
         public class ${schemaName}Factory {
             private static final JsonSchema SCHEMA = SchemaRegistry.get("${schemaName}");
@@ -55,6 +57,8 @@ function generateSimpleFactory(schemaName: string, packageName: string): string 
                 JsonNode node = JacksonMapper.getSharedInstance().readTree(jsonString);
                 return fromJsonNode(node);
             }
+
+            ${generateInputStreamFactoryMethod(schemaName)}
 
             /**
               * Fallback factory method that allows no-match through with a warning.
@@ -112,6 +116,8 @@ function generateOneOfFactory(
         import java.util.Set;
         import java.util.List;
         import java.util.ArrayList;
+        import java.io.InputStream;
+        import java.io.IOException;
         public class ${schemaName}Factory {
             ${optionSchemaDecls}
             private static final CompositionValidator validator = new CompositionValidator();
@@ -129,6 +135,8 @@ function generateOneOfFactory(
                     default: throw new ValidationException("Unknown matching option in oneOf");
                   }
                 }
+
+            ${generateInputStreamFactoryMethod(schemaName)}
 
              /**
               * Fallback factory method that allows no-match through with a warning.
@@ -168,6 +176,8 @@ function generateAnyOfFactory(
         import java.util.Set;
         import java.util.List;
         import java.util.ArrayList;
+        import java.io.InputStream;
+        import java.io.IOException;
 
         public class ${schemaName}Factory {
             ${optionSchemaDecls}
@@ -183,6 +193,8 @@ function generateAnyOfFactory(
 
                 return new ${schemaName}Impl(jsonNode, result.matchedOptionIndices());
                 }
+
+            ${generateInputStreamFactoryMethod(schemaName)}
             }
         `;
       }
@@ -206,6 +218,8 @@ function generateAllOfFactory(
         import java.util.Set;
         import java.util.List;
         import java.util.ArrayList;
+        import java.io.InputStream;
+        import java.io.IOException;
 
         public class ${schemaName}Factory {
             private static final JsonSchema SCHEMA = SchemaRegistry.get("${schemaName}");
@@ -220,6 +234,22 @@ function generateAllOfFactory(
                   }
                 return new ${schemaName}Impl(jsonNode);
                 }
+
+            ${generateInputStreamFactoryMethod(schemaName)}
             }
         `;
       }
+
+function generateInputStreamFactoryMethod(schemaName: string): string {
+    return dedent`
+        /**
+         * Parses and validates JSON from an input stream. The caller retains ownership of the stream.
+         */
+        public static ${schemaName} fromJson(InputStream jsonStream) throws IOException {
+            JsonNode node = JacksonMapper.getSharedInstance().readTree(
+                java.util.Objects.requireNonNull(jsonStream, "jsonStream must not be null")
+            );
+            return fromJsonNode(node);
+        }
+    `;
+}

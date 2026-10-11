@@ -22,6 +22,13 @@ describe('factoryGenerator', () => {
             expect(code).toContain('fromJson(String jsonString)');
            });
 
+        it('should overload fromJson for input streams', () => {
+            const code = generateFactoryClass('Person', false, packageName);
+            expect(code).toContain('fromJson(InputStream jsonStream)');
+            expect(code).toContain('readTree(');
+            expect(code).toContain('return fromJsonNode(node)');
+           });
+
         it('should include package placeholder', () => {
             const code = generateFactoryClass('Test', false, packageName);
             expect(code).toContain(`package ${packageName};`);
@@ -81,6 +88,17 @@ describe('factoryGenerator', () => {
             expect(code).toContain('fromJsonNodeLenient');
             expect(code).toContain('WARNING: JSON does not match any oneOf schema');
            });
+
+        it.each([
+            ['oneOf', sampleOneOfComposition],
+            ['anyOf', sampleAnyOfComposition],
+            ['allOf', sampleAllOfComposition],
+        ] as const)('should add the InputStream overload for %s factories', (_type, composition) => {
+            const code = generateFactoryClass('Composed', true, packageName, composition);
+            expect(code).toContain('fromJson(InputStream jsonStream)');
+            expect(code).toContain('Objects.requireNonNull(jsonStream');
+            expect(code).toContain('return fromJsonNode(node)');
+        });
 
         it('should delegate to anyOf factory when composition type is anyOf', () => {
             const code = generateFactoryClass('Multi', true, packageName, sampleAnyOfComposition);

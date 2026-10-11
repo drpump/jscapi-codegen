@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.net.URI;
 import java.nio.file.Path;
+import java.io.ByteArrayInputStream;
+import java.nio.charset.StandardCharsets;
 
 public class ContentTypesTestDriver {
     public static void main(String[] args) throws Exception {
@@ -21,6 +23,12 @@ public class ContentTypesTestDriver {
         check(image.getWidth() == 640L, "width getter");
         check(image.getHeight() == 480L, "height getter");
         System.out.println("Test 1 PASSED: Valid image JSON creates ContentTypes and exposes image getters");
+
+        ContentTypes streamedContent = ContentTypesFactory.fromJson(new ByteArrayInputStream(
+            validJson.toString().getBytes(StandardCharsets.UTF_8)
+        ));
+        check(streamedContent.isImageContent(), "InputStream factory overload selects the image variant");
+        System.out.println("Test 1b PASSED: ContentTypes factory parses and validates JSON from an InputStream");
 
         JsonNode invalidJson = mapper.readTree(Path.of("json-data", "invalid-content-types.json").toFile());
         boolean validationFailed = false;
